@@ -17,68 +17,89 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         st.info("対話履歴はまだありません。ワークフローを実行すると、ここに対話の流れが表示されます。")
         return
     
-    st.markdown('<div class="timeline-container">', unsafe_allow_html=True)
+    # タイムラインの開始をマークアップではなく直接スタイルを適用する方法で実装
+    timeline_container_style = """
+    <style>
+    .timeline-container {
+        position: relative;
+        padding-left: 2rem;
+    }
+    .timeline-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0.5rem;
+        height: 100%;
+        width: 2px;
+        background-color: #ddd;
+    }
+    </style>
+    """
+    st.markdown(timeline_container_style, unsafe_allow_html=True)
     
-    for i, dialog in enumerate(dialog_history):
-        agent_type = dialog.get("agent_type", "unknown")
-        content = dialog.get("content", "")
-        timestamp = dialog.get("timestamp", "")
-        
-        # HTMLタグをエスケープ処理
-        content = html.escape(content)
-        
-        # 新しいメッセージ用のクラス
-        is_new = highlight_new and i >= last_displayed_index
-        new_class = "new-message" if is_new else ""
-        
-        # エージェントタイプに基づくスタイル設定
-        if agent_type == "summarizer":
-            icon = "📝"
-            agent_class = "agent-summarizer"
-            agent_name = "要約者"
-        elif agent_type == "reviewer":
-            icon = "⭐"
-            agent_class = "agent-reviewer"
-            agent_name = "批評家"
-        elif agent_type == "title":
-            icon = "🏷️"
-            agent_class = "agent-title"
-            agent_name = "タイトル作成者"
-        elif agent_type == "system":
-            icon = "🔄"
-            agent_class = ""
-            agent_name = "システム"
-        else:
-            icon = "💬"
-            agent_class = ""
-            agent_name = "不明なエージェント"
-        
-        # 進捗情報があれば表示
-        progress_html = ""
-        if "progress" in dialog and dialog["progress"]:
-            progress = dialog["progress"]
-            progress_html = f'<div class="progress-bar"><div class="progress-value" style="width: {progress}%"></div></div>'
-        
-        # 新しいメッセージにはアニメーションエフェクトを追加
-        animation_class = "fade-in" if is_new else ""
-        
-        # 改行をHTML改行タグに変換
-        content = content.replace('\n', '<br>')
-        
-        st.markdown(f'''
-        <div class="timeline-item {animation_class}">
-            <div class="timeline-content {agent_class} {new_class}">
-                <div class="agent-name">
-                    <span class="agent-icon">{icon}</span> {agent_name}
-                    <span style="float: right; font-size: 0.8rem; color: #888;">{timestamp}</span>
+    # コンテナを作成
+    timeline_container = st.container()
+    
+    with timeline_container:
+        for i, dialog in enumerate(dialog_history):
+            agent_type = dialog.get("agent_type", "unknown")
+            content = dialog.get("content", "")
+            timestamp = dialog.get("timestamp", "")
+            
+            # HTMLタグをエスケープ処理
+            content = html.escape(content)
+            
+            # 新しいメッセージ用のクラス
+            is_new = highlight_new and i >= last_displayed_index
+            new_class = "new-message" if is_new else ""
+            
+            # エージェントタイプに基づくスタイル設定
+            if agent_type == "summarizer":
+                icon = "📝"
+                agent_class = "agent-summarizer"
+                agent_name = "要約者"
+            elif agent_type == "reviewer":
+                icon = "⭐"
+                agent_class = "agent-reviewer"
+                agent_name = "批評家"
+            elif agent_type == "title":
+                icon = "🏷️"
+                agent_class = "agent-title"
+                agent_name = "タイトル作成者"
+            elif agent_type == "system":
+                icon = "🔄"
+                agent_class = ""
+                agent_name = "システム"
+            else:
+                icon = "💬"
+                agent_class = ""
+                agent_name = "不明なエージェント"
+            
+            # 進捗情報があれば表示
+            progress_html = ""
+            if "progress" in dialog and dialog["progress"]:
+                progress = dialog["progress"]
+                progress_html = f'<div class="progress-bar"><div class="progress-value" style="width: {progress}%"></div></div>'
+            
+            # 新しいメッセージにはアニメーションエフェクトを追加
+            animation_class = "fade-in" if is_new else ""
+            
+            # 改行をHTML改行タグに変換
+            content = content.replace('\n', '<br>')
+            
+            # 各メッセージを独立したマークダウンブロックとして表示
+            st.markdown(f'''
+            <div class="timeline-item {animation_class}">
+                <div class="timeline-content {agent_class} {new_class}">
+                    <div class="agent-name">
+                        <span class="agent-icon">{icon}</span> {agent_name}
+                        <span style="float: right; font-size: 0.8rem; color: #888;">{timestamp}</span>
+                    </div>
+                    <div>{content}</div>
+                    {progress_html}
                 </div>
-                <div>{content}</div>
-                {progress_html}
             </div>
-        </div>
-        ''', unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+            ''', unsafe_allow_html=True)
     
     # 新しいメッセージ用のアニメーションCSS
     if highlight_new:
@@ -107,6 +128,30 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
             background-color: #00796B;
             border-radius: 3px;
             transition: width 0.3s ease;
+        }
+        
+        /* タイムラインアイテムのスタイル */
+        .timeline-item {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -2rem;
+            top: 0.25rem;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            background-color: #00796B;
+        }
+        
+        .timeline-content {
+            padding: 0.75rem;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
         </style>
         ''', unsafe_allow_html=True)
