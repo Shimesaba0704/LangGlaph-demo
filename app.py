@@ -134,7 +134,7 @@ def render_main_ui():
                 initial_state = add_to_dialog_history(
                     initial_state,
                     "system",
-                    f"新しいテキストが入力されました。ワークフローを開始します。"
+                    "新しいテキストが入力されました。ワークフローを開始します。"
                 )
                 
                 # 最初の対話履歴を表示
