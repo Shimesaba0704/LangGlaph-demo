@@ -56,7 +56,7 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
     
     st.markdown(
         """
-        <div style="background-color:#F5F5F5; padding:15px; border-radius:5px; margin:10px 0;">
+        <div style="background-color:#F5F5F5; padding:15px; border-radius:5px; margin:10px 0; color:#333333;">
         <strong>ワークフローの説明:</strong><br>
         1. <strong>開始</strong> → <strong>要約生成</strong>：テキストの初回要約を生成<br>
         2. <strong>要約生成</strong> → <strong>レビュー</strong>：生成された要約の品質を評価<br>
