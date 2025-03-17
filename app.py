@@ -31,6 +31,14 @@ initialize_client()
 from graph.workflow import create_workflow_graph
 from utils.state import create_initial_state
 
+# 初回読み込み時にprocessingをリセット
+if 'processing' not in st.session_state:
+    st.session_state.processing = False
+# 明示的にprocessingをリセットするフラグ
+if 'reset_processing' in st.session_state and st.session_state.reset_processing:
+    st.session_state.processing = False
+    st.session_state.reset_processing = False
+
 @auth_required
 def render_main_ui():
     st.markdown("""
@@ -49,8 +57,6 @@ def render_main_ui():
         st.session_state.result_placeholder = st.empty()
     if 'current_dialog_history' not in st.session_state:
         st.session_state.current_dialog_history = []
-    if 'processing' not in st.session_state:
-        st.session_state.processing = False
     # セッション上で最終結果を管理
     if "final_state" not in st.session_state:
         st.session_state.final_state = {}
@@ -102,12 +108,15 @@ def render_main_ui():
             label_visibility="collapsed"
         )
         
-        # 実行ボタン
+        # デバッグ情報（開発時のみ表示）
+        # st.write(f"Processing状態: {st.session_state.processing}")
+        
+        # 実行ボタン - 処理状態に関わらず常に有効化
+        # 処理中は別の方法で対応する
         run_button = st.button(
             "実行", 
             key="run_button", 
-            use_container_width=True, 
-            disabled=st.session_state.processing
+            use_container_width=True
         )
         
         # エージェント対話履歴セクション
@@ -118,6 +127,8 @@ def render_main_ui():
         if run_button:
             if not user_input:
                 st.error("文章が入力されていません。")
+            elif st.session_state.processing:
+                st.warning("すでに処理中です。完了までお待ちください。")
             else:
                 st.session_state.processing = True
                 graph = create_workflow_graph()
@@ -165,12 +176,18 @@ def render_main_ui():
                         st.session_state.error_message = f"処理中にエラーが発生しました: {str(e)}"
                     finally:
                         st.session_state.processing = False
+                        st.session_state.reset_processing = True
                         st.rerun()
                 
                 threading.Thread(target=run_workflow, daemon=True).start()
         
+        # 処理中の表示
+        if st.session_state.processing:
+            with dialog_container:
+                st.warning("処理中です。完了までお待ちください...")
+                st.spinner("実行中...")
         # 処理中でなければ対話履歴を表示
-        if not st.session_state.processing and st.session_state.current_dialog_history:
+        elif st.session_state.current_dialog_history:
             with dialog_container:
                 display_dialog_history(st.session_state.current_dialog_history)
         
