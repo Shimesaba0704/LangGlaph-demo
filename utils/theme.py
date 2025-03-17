@@ -1,17 +1,9 @@
 import streamlit as st
 
-def setup_langgraph_theme():
+def apply_theme_styles():
     """
-    アプリケーション全体のUIテーマとスタイルを設定
+    アプリケーション全体のUIスタイルを設定
     """
-    # ページ設定
-    st.set_page_config(
-        page_title="LangGraph Demo",
-        page_icon="🔄",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
     # CSS
     st.markdown("""
     <style>
@@ -326,8 +318,3 @@ def setup_langgraph_theme():
         border-left-width: 3px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-                
-    </style>
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    """, unsafe_allow_html=True)
