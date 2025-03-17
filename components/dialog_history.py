@@ -24,6 +24,7 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         .timeline-container {
             position: relative;
             padding-left: 2rem;
+            margin-bottom: 1rem;
         }
         .timeline-container::before {
             content: '';
@@ -100,7 +101,7 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         """, unsafe_allow_html=True)
         st.session_state.timeline_style_added = True
     
-    # 各メッセージを個別のDivで表示
+    # 各メッセージを個別に表示（HTMLタグの入れ子を避ける）
     for i, dialog in enumerate(dialog_history):
         agent_type = dialog.get("agent_type", "unknown")
         content = dialog.get("content", "")
@@ -147,8 +148,8 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         # 改行をHTML改行タグに変換
         content = content.replace('\n', '<br>')
         
-        # 個別のdiv要素として表示
-        st.markdown(f"""
+        # スタイル付きのメッセージボックスを表示（メッセージごとに個別のマークダウンで表示）
+        message_html = f"""
         <div class="timeline-container">
             <div class="timeline-item {animation_class}">
                 <div class="timeline-content {agent_class} {new_class}">
@@ -161,7 +162,10 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
                 </div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """
+        
+        # 各メッセージを独立したマークダウンとして表示
+        st.markdown(message_html, unsafe_allow_html=True)
 
 
 def update_dialog_display(placeholder, dialog_history: List[Dict[str, Any]], last_displayed_index: int = 0):
@@ -169,15 +173,13 @@ def update_dialog_display(placeholder, dialog_history: List[Dict[str, Any]], las
     増分更新で対話履歴を表示
     
     Args:
-        placeholder: Streamlitのプレースホルダ
+        placeholder: Streamlitのプレースホルダまたはコンテナ
         dialog_history: 対話履歴の全リスト
         last_displayed_index: 最後に表示されたインデックス
     """
-    # プレースホルダを使って表示を更新
-    with placeholder.container():
-        st.subheader("エージェント対話履歴 (リアルタイム)")
-        
-        # 新しいメッセージをハイライト表示
+    # プレースホルダまたはコンテナを使って表示を更新
+    with placeholder:
+        # 新しいメッセージをハイライト表示して全履歴を表示
         display_dialog_history(
             dialog_history, 
             highlight_new=True, 
