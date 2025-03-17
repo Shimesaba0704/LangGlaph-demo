@@ -1,12 +1,22 @@
 import streamlit as st
+
+# ページ設定を最初に実行
+st.set_page_config(
+    page_title="LangGraph Demo",
+    page_icon="🔄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 from dotenv import load_dotenv
 from auth import auth_required
 import time
 
 load_dotenv()
 
-from utils.theme import setup_langgraph_theme
-setup_langgraph_theme()
+from utils.theme import apply_theme_styles
+# テーマスタイルを適用
+apply_theme_styles()
 
 from components.sidebar import render_sidebar
 from components.workflow_viz import render_workflow_visualization
