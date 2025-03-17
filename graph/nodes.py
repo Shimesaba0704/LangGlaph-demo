@@ -22,7 +22,8 @@ def node_summarize(state: State) -> Generator[State, None, State]:
     # ワークフロー図の可視化
     if "current_node" not in state or state["current_node"] != "summarize":
         state["current_node"] = "summarize"
-        render_workflow_visualization(state, current_node="summarize")
+        # render_workflow_visualization はUI更新するためスレッドから直接呼ばない
+        # 代わりに状態を返して、メインスレッドでUI更新する
     
     # システムメッセージを対話履歴に追加
     state = add_to_dialog_history(
@@ -51,34 +52,46 @@ def node_summarize(state: State) -> Generator[State, None, State]:
     )
     yield state
     
-    if state["revision_count"] == 1:
+    try:
+        if state["revision_count"] == 1:
+            state = add_to_dialog_history(
+                state, 
+                "summarizer", 
+                "初回の要約を作成中...",
+                progress=40  # 進捗状況の追加（40%）
+            )
+            yield state
+            summary = agent.call(state["input_text"])
+        else:
+            state = add_to_dialog_history(
+                state, 
+                "summarizer", 
+                f"フィードバックを基に要約を改善中...",
+                progress=40  # 進捗状況の追加（40%）
+            )
+            yield state
+            summary = agent.refine(state["input_text"], state["feedback"])
+        
+        state["summary"] = summary
+        
+        # エージェントの応答をログ
         state = add_to_dialog_history(
             state, 
             "summarizer", 
-            "初回の要約を作成中...",
-            progress=40  # 進捗状況の追加（40%）
+            f"【要約 第{state['revision_count']}版】\n{summary}",
+            progress=60  # 進捗状況の追加（60%）
         )
-        yield state
-        summary = agent.call(state["input_text"])
-    else:
+    except Exception as e:
+        # エラーハンドリング
+        error_message = f"要約生成中にエラーが発生しました: {str(e)}"
         state = add_to_dialog_history(
-            state, 
-            "summarizer", 
-            f"フィードバックを基に要約を改善中...",
-            progress=40  # 進捗状況の追加（40%）
+            state,
+            "system",
+            error_message,
+            progress=30  # エラー時は進捗を進めない
         )
-        yield state
-        summary = agent.refine(state["input_text"], state["feedback"])
+        state["error"] = error_message
     
-    state["summary"] = summary
-    
-    # エージェントの応答をログ
-    state = add_to_dialog_history(
-        state, 
-        "summarizer", 
-        f"【要約 第{state['revision_count']}版】\n{summary}",
-        progress=60  # 進捗状況の追加（60%）
-    )
     # 状態を返してUIを更新
     yield state
     
@@ -95,7 +108,7 @@ def node_review(state: State) -> Generator[State, None, State]:
     # ワークフロー図の可視化
     if "current_node" not in state or state["current_node"] != "review":
         state["current_node"] = "review"
-        render_workflow_visualization(state, current_node="review")
+        # レンダリングはメインスレッドで行う
     
     # システムメッセージ
     state = add_to_dialog_history(
@@ -124,41 +137,55 @@ def node_review(state: State) -> Generator[State, None, State]:
     )
     yield state
     
-    # 最終レビューかどうか
-    is_final_review = (state["revision_count"] >= 3)
+    try:
+        # 最終レビューかどうか
+        is_final_review = (state["revision_count"] >= 3)
+        
+        # レビュー実行
+        feedback = agent.call(
+            current_summary=state["summary"],
+            previous_summary=state.get("previous_summary", ""),
+            previous_feedback=state.get("previous_feedback", ""),
+            is_final_review=is_final_review
+        )
+        
+        state["feedback"] = feedback
+        state["previous_summary"] = state["summary"]
+        state["previous_feedback"] = feedback
+        
+        # フィードバックをログ
+        state = add_to_dialog_history(
+            state,
+            "reviewer",
+            f"【フィードバック】\n{feedback}",
+            progress=80  # 進捗状況の追加（80%）
+        )
+        
+        # 承認判定
+        is_approved = agent.check_approval(feedback, state["revision_count"])
+        state["approved"] = is_approved
+        
+        # 判定結果をログ
+        judge_msg = "承認" if is_approved else "改訂が必要"
+        state = add_to_dialog_history(
+            state,
+            "reviewer",
+            f"【判定】{judge_msg}",
+            progress=85  # 進捗状況の追加（85%）
+        )
+    except Exception as e:
+        # エラーハンドリング
+        error_message = f"レビュー中にエラーが発生しました: {str(e)}"
+        state = add_to_dialog_history(
+            state,
+            "system",
+            error_message,
+            progress=70  # エラー時は進捗を進めない
+        )
+        state["error"] = error_message
+        # エラー時はデフォルトで承認として扱い、次のステップに進める
+        state["approved"] = True
     
-    # レビュー実行
-    feedback = agent.call(
-        current_summary=state["summary"],
-        previous_summary=state.get("previous_summary", ""),
-        previous_feedback=state.get("previous_feedback", ""),
-        is_final_review=is_final_review
-    )
-    
-    state["feedback"] = feedback
-    state["previous_summary"] = state["summary"]
-    state["previous_feedback"] = feedback
-    
-    # フィードバックをログ
-    state = add_to_dialog_history(
-        state,
-        "reviewer",
-        f"【フィードバック】\n{feedback}",
-        progress=80  # 進捗状況の追加（80%）
-    )
-    
-    # 承認判定
-    is_approved = agent.check_approval(feedback, state["revision_count"])
-    state["approved"] = is_approved
-    
-    # 判定結果をログ
-    judge_msg = "承認" if is_approved else "改訂が必要"
-    state = add_to_dialog_history(
-        state,
-        "reviewer",
-        f"【判定】{judge_msg}",
-        progress=85  # 進捗状況の追加（85%）
-    )
     # 状態を返してUIを更新
     yield state
     
@@ -175,7 +202,7 @@ def node_title(state: State) -> Generator[State, None, State]:
     # ワークフロー図の可視化
     if "current_node" not in state or state["current_node"] != "title_node":
         state["current_node"] = "title_node"
-        render_workflow_visualization(state, current_node="title_node")
+        # レンダリングはメインスレッドで行う
     
     # システムメッセージ
     state = add_to_dialog_history(
@@ -204,54 +231,46 @@ def node_title(state: State) -> Generator[State, None, State]:
     )
     yield state
     
-    # タイトル生成
-    output = agent.call(state["input_text"], state.get("transcript", []), state["summary"])
-    
-    state["title"] = output.get("title", "")
-    state["final_summary"] = output.get("summary", "")
-    
-    # タイトル生成結果
-    state = add_to_dialog_history(
-        state,
-        "title",
-        f"【生成タイトル】『{state['title']}』",
-        progress=96  # 進捗状況の追加（96%）
-    )
-    
-    # 処理完了
-    state = add_to_dialog_history(
-        state, 
-        "system", 
-        "すべての処理が完了しました。",
-        progress=100  # 進捗状況の追加（100%）
-    )
-    # 状態を返してUIを更新
-    yield state
-    
-    # ワークフロー図の最終表示
-    state["current_node"] = "END"
-    render_workflow_visualization(state, current_node="END")
-    
-    return state
-
-
-def should_revise(state: State) -> str:
-    """
-    批評に基づいて次のステップを決定する条件分岐関数
-    
-    Args:
-        state: 現在の状態
+    try:
+        # タイトル生成
+        output = agent.call(state["input_text"], state.get("transcript", []), state["summary"])
         
-    Returns:
-        str: 次のノード名
-    """
-    # 最大改訂回数を超えている場合は次のステップへ
-    if state["revision_count"] >= 3:
-        return "title_node"
-    
-    # 承認されていない場合は要約をやり直す
-    if not state.get("approved", False):
-        return "summarize"
-    
-    # 承認された場合はタイトル生成へ進む
-    return "title_node"
+        state["title"] = output.get("title", "")
+        state["final_summary"] = output.get("summary", "")
+        
+        # タイトル生成結果
+        state = add_to_dialog_history(
+            state,
+            "title",
+            f"【生成タイトル】『{state['title']}』",
+            progress=96  # 進捗状況の追加（96%）
+        )
+        
+        # 処理完了
+        state = add_to_dialog_history(
+            state, 
+            "system", 
+            "すべての処理が完了しました。",
+            progress=100  # 進捗状況の追加（100%）
+        )
+    except Exception as e:
+        # エラーハンドリング
+        error_message = f"タイトル生成中にエラーが発生しました: {str(e)}"
+        state = add_to_dialog_history(
+            state,
+            "system",
+            error_message,
+            progress=90  # エラー時は進捗を進めない
+        )
+        state["error"] = error_message
+        # エラー時もタイトルとサマリーをデフォルト値で設定
+        state["title"] = "エラーが発生しました"
+        state["final_summary"] = state.get("summary", "要約が生成できませんでした。")
+        
+        # エラー完了メッセージ
+        state = add_to_dialog_history(
+            state, 
+            "system", 
+            "エラーが発生しましたが、処理を完了します。",
+            progress=100  # エラー時も完了として扱う
+        )
