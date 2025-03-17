@@ -18,6 +18,77 @@ st.markdown("""
 <style>
 /* カラー変数やレイアウト設定など */
 /* （元のCSS内容をそのまま利用） */
+
+/* 進捗インジケーター関連のスタイル追加 */
+.task-progress {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    animation: fadeIn 0.5s ease-out forwards;
+}
+.task-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    font-size: 12px;
+}
+.task-icon.active {
+    background-color: #00796B;
+    color: white;
+    animation: pulse 1.5s infinite;
+}
+.task-icon.completed {
+    background-color: #4DB6AC;
+    color: white;
+}
+.task-label {
+    flex-grow: 1;
+}
+.task-status {
+    font-size: 12px;
+    color: #888;
+}
+.task-status.active {
+    color: #00796B;
+    font-weight: bold;
+}
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.processing-indicator {
+    display: flex;
+    align-items: center;
+    background-color: #E0F2F1;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    border-left: 4px solid #00796B;
+    animation: pulse 1.5s infinite;
+}
+.processing-icon {
+    margin-right: 10px;
+    font-size: 18px;
+    color: #00796B;
+}
+.latest-action {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background-color: #FFF8E1;
+    border-left: 4px solid #FFC107;
+    border-radius: 4px;
+    font-size: 14px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -38,6 +109,20 @@ if 'processing' not in st.session_state:
 if 'reset_processing' in st.session_state and st.session_state.reset_processing:
     st.session_state.processing = False
     st.session_state.reset_processing = False
+# 最新のアクション状態を追跡
+if 'latest_action' not in st.session_state:
+    st.session_state.latest_action = ""
+
+def get_node_description(node_name):
+    """ノード名に基づいて説明テキストを取得"""
+    descriptions = {
+        "summarize": "テキストの要約を生成しています...",
+        "review": "要約の品質を評価しています...",
+        "title_node": "適切なタイトルを付与しています...",
+        "END": "処理が完了しました！",
+        "": "ワークフローを初期化中..."
+    }
+    return descriptions.get(node_name, "処理中...")
 
 @auth_required
 def render_main_ui():
@@ -48,9 +133,6 @@ def render_main_ui():
              style="width: 300px; display: block; max-width: 100%;">
     </div>
     """, unsafe_allow_html=True)
-    
-    # タブの作成（対話ログタブを削除）
-    # tab1, tab2 = st.tabs(["ワークフロー実行", "対話ログ"])
     
     # プレースホルダーとセッション状態の初期化
     if 'result_placeholder' not in st.session_state:
@@ -117,6 +199,9 @@ def render_main_ui():
     
     # エージェント対話履歴セクション
     st.subheader("エージェント対話履歴")
+    
+    # 進捗状況表示用コンテナを追加
+    progress_status_container = st.container()
     dialog_container = st.container()
     
     # 実行ボタンが押された場合の処理
@@ -138,27 +223,44 @@ def render_main_ui():
             initial_state = add_to_dialog_history(
                 initial_state,
                 "system",
-                "新しいテキストが入力されました。ワークフローを開始します。"
+                "新しいテキストが入力されました。ワークフローを開始します。",
+                progress=5  # 初期進捗状態
             )
             st.session_state.current_dialog_history = initial_state["dialog_history"]
             
             # セッション状態に最終結果用の初期状態をセット
             st.session_state.final_state = initial_state.copy()
-            
-            # 対話履歴の表示（処理開始メッセージ）
-            with dialog_container:
-                st.info("処理を開始しました。完了するまでしばらくお待ちください...")
+            # 最新アクション状態をリセット
+            st.session_state.latest_action = "ワークフローを開始しています..."
             
             # ワークフロー処理をバックグラウンドスレッドで実行
             def run_workflow():
                 try:
-                    result = graph.invoke(initial_state)
-                    st.session_state.final_state.update(result)
-                    # 対話履歴も更新
-                    if "dialog_history" in result:
-                        st.session_state.current_dialog_history = result["dialog_history"]
+                    # ワークフローの実行
+                    for event_type, data in graph.stream(initial_state):
+                        if event_type == "on_chain_end":
+                            # ノード実行終了時
+                            current_node = data.get("current_node", "")
+                            st.session_state.latest_action = get_node_description(current_node)
+                            
+                            # 対話履歴も更新
+                            if "dialog_history" in data:
+                                st.session_state.current_dialog_history = data["dialog_history"]
+                            
+                            # 一時的な状態更新
+                            st.session_state.final_state.update(data)
+                            # 0.5秒待機してUI更新に時間を与える
+                            time.sleep(0.5)
+                    
+                    # 最終結果の設定
+                    final_result = graph.get_state()
+                    st.session_state.final_state.update(final_result)
+                    if "dialog_history" in final_result:
+                        st.session_state.current_dialog_history = final_result["dialog_history"]
+                    st.session_state.latest_action = "処理が完了しました"
                 except Exception as e:
                     st.session_state.error_message = f"処理中にエラーが発生しました: {str(e)}"
+                    st.session_state.latest_action = "エラーが発生しました"
                 finally:
                     st.session_state.processing = False
                     st.session_state.reset_processing = True
@@ -167,39 +269,93 @@ def render_main_ui():
             threading.Thread(target=run_workflow, daemon=True).start()
     
     # 処理中の表示
-    if st.session_state.processing:
-        with dialog_container:
-            st.warning("処理中です。完了までお待ちください...")
-            st.spinner("実行中...")
-    # 処理中でなければ対話履歴を表示
-    elif st.session_state.current_dialog_history:
-        with dialog_container:
-            display_dialog_history(st.session_state.current_dialog_history)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    if 'error_message' in st.session_state:
-        st.error(st.session_state.error_message)
-    
-    # 最終結果の表示（処理完了後）
-    if not st.session_state.processing and 'result_placeholder' in st.session_state:
-        with st.session_state.result_placeholder:
-            final_state = st.session_state.final_state
-            if "title" in final_state and "final_summary" in final_state:
+    with progress_status_container:
+        if st.session_state.processing:
+            # 現在のワークフロー状態
+            current_state = st.session_state.final_state
+            current_node = current_state.get("current_node", "")
+            revision_count = current_state.get("revision_count", 0)
+            
+            # 進行中プロセスの視覚的インジケーター表示
+            st.markdown(f"""
+            <div class="processing-indicator">
+                <div class="processing-icon">⚙️</div>
+                <div>
+                    <strong>処理中...</strong> ワークフローを実行しています
+                    <div class="latest-action">{st.session_state.latest_action}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # 各タスクの状態を表示
+            st.markdown("<div style='background-color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>", unsafe_allow_html=True)
+            st.markdown("#### 実行タスクの状態")
+            
+            # 各タスクのステータス判定
+            tasks = [
+                {"id": "summarize", "label": "要約生成", "icon": "📝"},
+                {"id": "review", "label": "品質レビュー", "icon": "⭐"},
+                {"id": "title_node", "label": "タイトル生成", "icon": "🏷️"},
+                {"id": "END", "label": "処理完了", "icon": "✅"}
+            ]
+            
+            for task in tasks:
+                task_id = task["id"]
+                label = task["label"]
+                icon = task["icon"]
+                
+                # タスクの状態を判定
+                status = "待機中"
+                icon_class = ""
+                status_class = ""
+                
+                if current_node == task_id:
+                    status = "実行中"
+                    icon_class = "active"
+                    status_class = "active"
+                elif task_id == "summarize" and revision_count > 0:
+                    status = f"完了 (改訂 {revision_count}回)"
+                    icon_class = "completed"
+                elif current_node == "review" and task_id == "summarize":
+                    status = "完了"
+                    icon_class = "completed"
+                elif current_node == "title_node" and (task_id == "summarize" or task_id == "review"):
+                    status = "完了"
+                    icon_class = "completed"
+                elif current_node == "END" and task_id != "END":
+                    status = "完了"
+                    icon_class = "completed"
+                
+                # タスク状態の表示
                 st.markdown(f"""
-                <div class="result-card">
-                    <h2>{final_state['title']}</h2>
-                    <div style="padding: 1rem; background-color: #f9f9f9; border-radius: 6px; margin-top: 1rem;">
-                        {final_state["final_summary"]}
-                    </div>
+                <div class="task-progress">
+                    <div class="task-icon {icon_class}">{icon}</div>
+                    <div class="task-label">{label}</div>
+                    <div class="task-status {status_class}">{status}</div>
                 </div>
                 """, unsafe_allow_html=True)
+            
+            # 現在のステップに関する追加情報
+            if current_node == "summarize":
+                step_info = "テキストを分析し、要約を生成しています..."
+            elif current_node == "review":
+                step_info = "要約の品質を評価しています..."
+            elif current_node == "title_node":
+                step_info = "要約に適切なタイトルを付けています..."
+            elif current_node == "END":
+                step_info = "すべてのタスクが完了しました！"
             else:
-                # 結果が得られなかった場合は表示しない
-                if final_state and any(k for k in final_state.keys() if k not in ["dialog_history", "transcript"]):
-                    st.warning("処理は完了しましたが、完全な結果が得られませんでした。")
-                    st.json({k: v for k, v in final_state.items() if k not in ["dialog_history", "transcript"]})
-
-if __name__ == "__main__":
-    render_sidebar()
-    render_main_ui()
+                step_info = "ワークフローを初期化しています..."
+                
+            st.markdown(f"<div style='margin-top: 10px; font-style: italic;'>{step_info}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # スピナーを表示
+            st.spinner("実行中...")
+            
+    # 対話履歴の表示
+    with dialog_container:
+        if st.session_state.processing or st.session_state.current_dialog_history:
+            display_dialog_history(st.session_state.current_dialog_history)
+        else:
+            st.info("対話履歴はまだありません。ワークフローを実行すると、ここに対話の流れが表示されます。")
