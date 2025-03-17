@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 import html
+import re
 
 
 def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: bool = False, last_displayed_index: int = 0):
@@ -106,6 +107,9 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         agent_type = dialog.get("agent_type", "unknown")
         content = dialog.get("content", "")
         timestamp = dialog.get("timestamp", "")
+        
+        # HTMLタグを除去（特に </div> タグがテキストとして表示されるのを防ぐ）
+        content = re.sub(r'</?div[^>]*>', '', content)
         
         # HTMLタグをエスケープ処理
         content = html.escape(content)
