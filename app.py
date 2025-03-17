@@ -23,7 +23,7 @@ st.markdown("""
 
 from components.sidebar import render_sidebar
 from components.workflow_viz import render_workflow_visualization
-from components.dialog_history import display_dialog_history, add_to_dialog_history, update_dialog_display
+from components.dialog_history import display_dialog_history, add_to_dialog_history
 
 from utils.api_client import initialize_client, get_client
 initialize_client()
@@ -45,16 +45,10 @@ def render_main_ui():
     tab1, tab2 = st.tabs(["ワークフロー実行", "対話ログ"])
     
     # プレースホルダーとセッション状態の初期化
-    if 'dialog_placeholder_tab1' not in st.session_state:
-        st.session_state.dialog_placeholder_tab1 = st.empty()
-    if 'dialog_placeholder_tab2' not in st.session_state:
-        st.session_state.dialog_placeholder_tab2 = st.empty()
     if 'result_placeholder' not in st.session_state:
         st.session_state.result_placeholder = st.empty()
     if 'current_dialog_history' not in st.session_state:
         st.session_state.current_dialog_history = []
-    if 'last_displayed_history_length' not in st.session_state:
-        st.session_state.last_displayed_history_length = 0
     if 'processing' not in st.session_state:
         st.session_state.processing = False
     # セッション上で最終結果を管理
@@ -108,11 +102,20 @@ def render_main_ui():
             label_visibility="collapsed"
         )
         
-        st.subheader("エージェント対話履歴 (リアルタイム)")
-        log_container_tab1 = st.container()
-        st.session_state.dialog_placeholder_tab1 = log_container_tab1
+        # 実行ボタン
+        run_button = st.button(
+            "実行", 
+            key="run_button", 
+            use_container_width=True, 
+            disabled=st.session_state.processing
+        )
         
-        if st.button("実行", key="run_button", use_container_width=True, disabled=st.session_state.processing):
+        # エージェント対話履歴セクション
+        st.subheader("エージェント対話履歴")
+        dialog_container = st.container()
+        
+        # 実行ボタンが押された場合の処理
+        if run_button:
             if not user_input:
                 st.error("文章が入力されていません。")
             else:
@@ -122,7 +125,6 @@ def render_main_ui():
                 
                 # 対話履歴の初期化
                 st.session_state.current_dialog_history = []
-                st.session_state.last_displayed_history_length = 0
                 
                 # 初期状態の作成と対話履歴への追加
                 initial_state = create_initial_state(user_input)
@@ -136,35 +138,18 @@ def render_main_ui():
                 # セッション状態に最終結果用の初期状態をセット
                 st.session_state.final_state = initial_state.copy()
                 
-                with log_container_tab1:
-                    display_dialog_history(st.session_state.current_dialog_history)
-                    st.session_state.last_displayed_history_length = len(st.session_state.current_dialog_history)
-                with st.session_state.dialog_placeholder_tab2:
-                    display_dialog_history(st.session_state.current_dialog_history)
+                # 対話履歴の表示
+                with dialog_container:
+                    st.info("処理を開始しました。完了するまでしばらくお待ちください...")
                 
-                # イベントハンドラ（増分更新）
+                # イベントハンドラ（状態更新）
                 def update_ui(event_type, data):
                     if (event_type == "on_node_yield" or event_type == "on_node_end") and "state" in data:
                         node_state = data["state"]
                         if "dialog_history" in node_state:
-                            current_history = node_state["dialog_history"]
-                            st.session_state.current_dialog_history = current_history
-                            with log_container_tab1:
-                                display_dialog_history(
-                                    current_history,
-                                    highlight_new=True,
-                                    last_displayed_index=st.session_state.last_displayed_history_length
-                                )
-                            with st.session_state.dialog_placeholder_tab2:
-                                display_dialog_history(
-                                    current_history,
-                                    highlight_new=True,
-                                    last_displayed_index=st.session_state.last_displayed_history_length
-                                )
-                            st.session_state.last_displayed_history_length = len(current_history)
+                            st.session_state.current_dialog_history = node_state["dialog_history"]
                             if event_type == "on_node_end":
                                 st.session_state.final_state.update(node_state)
-                                time.sleep(0.3)
                 
                 config = {
                     "configurable": {"thread_id": "1"},
@@ -180,10 +165,14 @@ def render_main_ui():
                         st.session_state.error_message = f"処理中にエラーが発生しました: {str(e)}"
                     finally:
                         st.session_state.processing = False
-                        # 処理完了時に最終結果を表示
                         st.rerun()
                 
                 threading.Thread(target=run_workflow, daemon=True).start()
+        
+        # 処理中でなければ対話履歴を表示
+        if not st.session_state.processing and st.session_state.current_dialog_history:
+            with dialog_container:
+                display_dialog_history(st.session_state.current_dialog_history)
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -192,17 +181,14 @@ def render_main_ui():
         st.markdown("""
         <div class="card">
             <h3>LangGraphワークフロー情報</h3>
-            <p>エージェント間の対話内容がリアルタイムで表示されます。</p>
+            <p>エージェント間の対話内容の完全な履歴が表示されます。</p>
         </div>
         """, unsafe_allow_html=True)
         with st.expander("実行履歴", expanded=True):
-            log_container_tab2 = st.container()
-            st.session_state.dialog_placeholder_tab2 = log_container_tab2
-            with log_container_tab2:
-                if st.session_state.current_dialog_history:
-                    display_dialog_history(st.session_state.current_dialog_history)
-                else:
-                    st.info("実行履歴がありません。ワークフローを実行すると、ここに履歴が表示されます。")
+            if st.session_state.current_dialog_history:
+                display_dialog_history(st.session_state.current_dialog_history)
+            else:
+                st.info("実行履歴がありません。ワークフローを実行すると、ここに履歴が表示されます。")
     
     if 'error_message' in st.session_state:
         st.error(st.session_state.error_message)
@@ -221,8 +207,10 @@ def render_main_ui():
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("処理は完了しましたが、完全な結果が得られませんでした。")
-                st.json({k: v for k, v in final_state.items() if k not in ["dialog_history", "transcript"]})
+                # 結果が得られなかった場合は表示しない
+                if final_state and any(k for k in final_state.keys() if k not in ["dialog_history", "transcript"]):
+                    st.warning("処理は完了しましたが、完全な結果が得られませんでした。")
+                    st.json({k: v for k, v in final_state.items() if k not in ["dialog_history", "transcript"]})
 
 if __name__ == "__main__":
     render_sidebar()
