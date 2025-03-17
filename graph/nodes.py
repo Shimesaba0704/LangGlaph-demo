@@ -26,8 +26,10 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         f"要約エージェントが要約を作成 (第{state['revision_count']}版)"
     )
     
-    # ワークフロー図の可視化
-    render_workflow_visualization(state, current_node="summarize")
+    # ワークフロー図の可視化（最適化: 重複呼び出しを削除）
+    if "current_node" not in state or state["current_node"] != "summarize":
+        state["current_node"] = "summarize"
+        render_workflow_visualization(state, current_node="summarize")
     
     # 開始メッセージ
     state = add_to_dialog_history(
@@ -35,14 +37,14 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         "summarizer", 
         "要約を生成します..."
     )
-    yield state  # <-- 追加: ここでUIを更新
+    yield state  # <-- UIを更新
     
     # 1回目の要約かどうかで処理を分岐
     if state["revision_count"] == 1:
         # 実際にエージェントへ渡すプロンプトを対話履歴に記録（オプション）
         prompt_text = agent.prompt_template.format(input_text=state["input_text"])
         state = add_to_dialog_history(state, "summarizer", f"【送信プロンプト】\n{prompt_text}")
-        yield state  # <-- 追加
+        yield state  # <-- 増分更新
         
         summary = agent.call(state["input_text"])
     else:
@@ -51,7 +53,7 @@ def node_summarize(state: State) -> Generator[State, None, State]:
             feedback=state["feedback"]
         )
         state = add_to_dialog_history(state, "summarizer", f"【送信プロンプト】\n{prompt_text}")
-        yield state  # <-- 追加
+        yield state  # <-- 増分更新
         
         summary = agent.refine(state["input_text"], state["feedback"])
     
@@ -63,7 +65,7 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         "summarizer", 
         f"【要約 第{state['revision_count']}版】\n{summary}"
     )
-    yield state  # <-- 追加
+    yield state  # <-- 増分更新
     
     return state
 
@@ -75,8 +77,10 @@ def node_review(state: State) -> Generator[State, None, State]:
     client = get_client()
     agent = ReviewerAgent(client)
     
-    # ワークフロー図の可視化
-    render_workflow_visualization(state, current_node="review")
+    # ワークフロー図の可視化（最適化: 重複呼び出しを削除）
+    if "current_node" not in state or state["current_node"] != "review":
+        state["current_node"] = "review"
+        render_workflow_visualization(state, current_node="review")
     
     # システムメッセージ
     state = add_to_dialog_history(
@@ -91,7 +95,7 @@ def node_review(state: State) -> Generator[State, None, State]:
         "reviewer", 
         "レビューを実施しています..."
     )
-    yield state  # <-- 追加
+    yield state  # <-- 増分更新
     
     # 最終レビューかどうか
     is_final_review = (state["revision_count"] >= 3)
@@ -116,7 +120,7 @@ def node_review(state: State) -> Generator[State, None, State]:
         "reviewer",
         f"【フィードバック】\n{feedback}"
     )
-    yield state  # <-- 追加
+    yield state  # <-- 増分更新
     
     # 承認判定
     is_approved = agent.check_approval(feedback, state["revision_count"])
@@ -129,7 +133,7 @@ def node_review(state: State) -> Generator[State, None, State]:
         "reviewer",
         f"【判定】{judge_msg}"
     )
-    yield state  # <-- 追加
+    yield state  # <-- 増分更新
     
     return state
 
@@ -141,8 +145,10 @@ def node_title(state: State) -> Generator[State, None, State]:
     client = get_client()
     agent = TitleCopywriterAgent(client)
     
-    # ワークフロー図の可視化
-    render_workflow_visualization(state, current_node="title_node")
+    # ワークフロー図の可視化（最適化: 重複呼び出しを削除）
+    if "current_node" not in state or state["current_node"] != "title_node":
+        state["current_node"] = "title_node"
+        render_workflow_visualization(state, current_node="title_node")
     
     # システムメッセージ
     state = add_to_dialog_history(
@@ -157,7 +163,7 @@ def node_title(state: State) -> Generator[State, None, State]:
         "title", 
         "タイトルを生成しています..."
     )
-    yield state  # <-- 追加
+    yield state  # <-- 増分更新
     
     output = agent.call(state["input_text"], state.get("transcript", []), state["summary"])
     state["title"] = output.get("title", "")
@@ -169,7 +175,7 @@ def node_title(state: State) -> Generator[State, None, State]:
         "title",
         f"【生成タイトル】『{state['title']}』"
     )
-    yield state  # <-- 追加
+    yield state  # <-- 増分更新
     
     # 処理完了
     state = add_to_dialog_history(
@@ -177,9 +183,10 @@ def node_title(state: State) -> Generator[State, None, State]:
         "system", 
         "すべての処理が完了しました。"
     )
-    yield state  # <-- 追加
+    yield state  # <-- 増分更新
     
     # ワークフロー図の最終表示
+    state["current_node"] = "END"
     render_workflow_visualization(state, current_node="END")
     
     return state
