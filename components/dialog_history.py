@@ -19,6 +19,7 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]]):
         padding: 15px;
         margin-bottom: 15px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        animation: fadeIn 0.5s ease-out forwards;
     }
     .agent-header {
         display: flex;
@@ -56,14 +57,69 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]]):
         border-left: 4px solid #9E9E9E;
         background-color: #f9f9f9;
     }
+    .progress-container {
+        margin-top: 10px;
+        margin-bottom: 5px;
+    }
+    .progress-bar {
+        height: 6px;
+        background-color: #f0f0f0;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .progress-indicator {
+        height: 100%;
+        background-color: #00796B;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+    .progress-text {
+        font-size: 12px;
+        color: #666;
+        text-align: right;
+        margin-top: 2px;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+        0% { opacity: 0.6; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
+    }
+    .pulse-animation {
+        animation: pulse 1.5s infinite;
+    }
     </style>
     """, unsafe_allow_html=True)
     
-    # 各対話メッセージを表示
+    # 全体の進捗状態を表示（最新の進捗値を使用）
+    latest_progress = 0
     for dialog in dialog_history:
+        if "progress" in dialog and dialog["progress"] is not None:
+            latest_progress = max(latest_progress, dialog["progress"])
+    
+    # 全体の進捗バーを表示
+    if latest_progress > 0:
+        st.markdown(f"""
+        <div style="margin-bottom: 15px; background-color: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="font-weight: bold;">全体の進捗状況</span>
+                <span style="color: #00796B; font-weight: bold;">{latest_progress}%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-indicator" style="width: {latest_progress}%;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # 各対話メッセージを表示
+    for i, dialog in enumerate(dialog_history):
         agent_type = dialog.get("agent_type", "unknown")
         content = dialog.get("content", "")
         timestamp = dialog.get("timestamp", "")
+        progress = dialog.get("progress", None)
         
         # エージェント毎の設定
         if agent_type == "summarizer":
@@ -87,6 +143,10 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]]):
             agent_name = "不明なエージェント"
             agent_class = ""
         
+        # 最新メッセージかどうかを判定（アニメーション用）
+        is_latest = (i == len(dialog_history) - 1)
+        pulse_class = " pulse-animation" if is_latest and "完了" not in content and "生成" in content else ""
+        
         # 対話カードの表示
         st.markdown(f"""
         <div class="dialog-card {agent_class}">
@@ -96,16 +156,23 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]]):
                 </div>
                 <span class="agent-timestamp">{timestamp}</span>
             </div>
-            <div class="agent-content">
+            <div class="agent-content{pulse_class}">
                 {content.replace('\n', '<br>')}
             </div>
-        </div>
         """, unsafe_allow_html=True)
         
-        # 進捗がある場合は表示（オプション）
-        if "progress" in dialog and dialog["progress"]:
-            progress = dialog["progress"]
-            st.progress(progress / 100)
+        # 進捗表示（対話メッセージごと）
+        if progress is not None:
+            st.markdown(f"""
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-indicator" style="width: {progress}%;"></div>
+                </div>
+                <div class="progress-text">{progress}% 完了</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def add_to_dialog_history(
