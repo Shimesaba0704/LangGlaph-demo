@@ -183,9 +183,10 @@ def render_main_ui():
                 
                 threading.Thread(target=run_workflow, daemon=True).start()
         
-        # 処理中は自動再描画して最新の対話履歴を反映
+        # processing が真の場合は、1秒待機後にスクリプトを再実行することで最新状態を反映
         if st.session_state.processing:
-            st.experimental_autorefresh(interval=1000, limit=100, key="autorefresh")
+            time.sleep(1)
+            st.experimental_rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -212,7 +213,6 @@ def render_main_ui():
     # 最終結果の表示（処理完了後）
     if not st.session_state.processing and 'result_placeholder' in st.session_state:
         with st.session_state.result_placeholder:
-            # セッション状態上のfinal_stateを参照
             final_state = st.session_state.final_state
             if "title" in final_state and "final_summary" in final_state:
                 st.markdown(f"""
