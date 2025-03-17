@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSSスタイル（省略していますが、元のコードと同様の内容）
+# CSSスタイル（元のCSS内容をそのまま利用）
 st.markdown("""
 <style>
 /* カラー変数やレイアウト設定など */
@@ -57,6 +57,9 @@ def render_main_ui():
         st.session_state.last_displayed_history_length = 0
     if 'processing' not in st.session_state:
         st.session_state.processing = False
+    # セッション上で最終結果を管理
+    if "final_state" not in st.session_state:
+        st.session_state.final_state = {}
 
     with tab1:
         st.markdown("""
@@ -130,13 +133,14 @@ def render_main_ui():
                 )
                 st.session_state.current_dialog_history = initial_state["dialog_history"]
                 
+                # セッション状態に最終結果用の初期状態をセット
+                st.session_state.final_state = initial_state.copy()
+                
                 with log_container_tab1:
                     display_dialog_history(st.session_state.current_dialog_history)
                     st.session_state.last_displayed_history_length = len(st.session_state.current_dialog_history)
                 with st.session_state.dialog_placeholder_tab2:
                     display_dialog_history(st.session_state.current_dialog_history)
-                
-                final_state = initial_state.copy()
                 
                 # イベントハンドラ（増分更新）
                 def update_ui(event_type, data):
@@ -159,7 +163,7 @@ def render_main_ui():
                                 )
                             st.session_state.last_displayed_history_length = len(current_history)
                             if event_type == "on_node_end":
-                                final_state.update(node_state)
+                                st.session_state.final_state.update(node_state)
                                 time.sleep(0.3)
                 
                 config = {
@@ -171,7 +175,7 @@ def render_main_ui():
                 def run_workflow():
                     try:
                         result = graph.invoke(initial_state, config)
-                        final_state.update(result)
+                        st.session_state.final_state.update(result)
                     except Exception as e:
                         st.session_state.error_message = f"処理中にエラーが発生しました: {str(e)}"
                     finally:
@@ -208,6 +212,8 @@ def render_main_ui():
     # 最終結果の表示（処理完了後）
     if not st.session_state.processing and 'result_placeholder' in st.session_state:
         with st.session_state.result_placeholder:
+            # セッション状態上のfinal_stateを参照
+            final_state = st.session_state.final_state
             if "title" in final_state and "final_summary" in final_state:
                 st.markdown(f"""
                 <div class="result-card">
