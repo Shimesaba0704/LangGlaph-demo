@@ -102,16 +102,31 @@ initialize_client()
 from graph.workflow import create_workflow_graph
 from utils.state import create_initial_state
 
-# 初回読み込み時にprocessingをリセット
+# 初期化: セッション状態の変数
 if 'processing' not in st.session_state:
     st.session_state.processing = False
-# 明示的にprocessingをリセットするフラグ
-if 'reset_processing' in st.session_state and st.session_state.reset_processing:
-    st.session_state.processing = False
+if 'reset_processing' not in st.session_state:
     st.session_state.reset_processing = False
-# 最新のアクション状態を追跡
 if 'latest_action' not in st.session_state:
     st.session_state.latest_action = ""
+if 'need_rerun' not in st.session_state:
+    st.session_state.need_rerun = False
+if 'current_dialog_history' not in st.session_state:
+    st.session_state.current_dialog_history = []
+if 'final_state' not in st.session_state:
+    st.session_state.final_state = {}
+if 'error_message' not in st.session_state:
+    st.session_state.error_message = None
+
+# rerunフラグが設定されていれば再実行
+if st.session_state.need_rerun:
+    st.session_state.need_rerun = False
+    st.rerun()
+
+# 明示的にprocessingをリセットするフラグ
+if st.session_state.reset_processing:
+    st.session_state.processing = False
+    st.session_state.reset_processing = False
 
 def get_node_description(node_name):
     """ノード名に基づいて説明テキストを取得"""
@@ -137,11 +152,6 @@ def render_main_ui():
     # プレースホルダーとセッション状態の初期化
     if 'result_placeholder' not in st.session_state:
         st.session_state.result_placeholder = st.empty()
-    if 'current_dialog_history' not in st.session_state:
-        st.session_state.current_dialog_history = []
-    # セッション上で最終結果を管理
-    if "final_state" not in st.session_state:
-        st.session_state.final_state = {}
 
     # メイン画面（タブなし）
     st.markdown("""
@@ -212,6 +222,7 @@ def render_main_ui():
             st.warning("すでに処理中です。完了までお待ちください。")
         else:
             st.session_state.processing = True
+            st.session_state.error_message = None
             graph = create_workflow_graph()
             client = get_client()
             
@@ -236,37 +247,61 @@ def render_main_ui():
             # ワークフロー処理をバックグラウンドスレッドで実行
             def run_workflow():
                 try:
+                    # グローバル変数を使わず、安全にセッション状態を更新
+                    result_states = []
+                    
                     # ワークフローの実行
                     for event_type, data in graph.stream(initial_state):
                         if event_type == "on_chain_end":
                             # ノード実行終了時
                             current_node = data.get("current_node", "")
-                            st.session_state.latest_action = get_node_description(current_node)
+                            action_desc = get_node_description(current_node)
                             
-                            # 対話履歴も更新
+                            # スレッドセーフな方法でセッション状態を更新
+                            # これらの更新はUIに直接影響しないのでスレッド内でも安全
+                            st.session_state.latest_action = action_desc
+                            
+                            # 対話履歴も更新（deepcopyを使って安全にコピー）
                             if "dialog_history" in data:
-                                st.session_state.current_dialog_history = data["dialog_history"]
+                                st.session_state.current_dialog_history = data["dialog_history"].copy()
                             
                             # 一時的な状態更新
-                            st.session_state.final_state.update(data)
-                            # 0.5秒待機してUI更新に時間を与える
+                            st.session_state.final_state.update(data.copy())
+                            
+                            # 結果を保存
+                            result_states.append(data.copy())
+                            
+                            # 少し待機してUI更新の時間を与える
                             time.sleep(0.5)
                     
                     # 最終結果の設定
                     final_result = graph.get_state()
-                    st.session_state.final_state.update(final_result)
+                    st.session_state.final_state.update(final_result.copy())
+                    
                     if "dialog_history" in final_result:
-                        st.session_state.current_dialog_history = final_result["dialog_history"]
+                        st.session_state.current_dialog_history = final_result["dialog_history"].copy()
+                    
                     st.session_state.latest_action = "処理が完了しました"
+                
                 except Exception as e:
+                    # エラー発生時の処理
                     st.session_state.error_message = f"処理中にエラーが発生しました: {str(e)}"
                     st.session_state.latest_action = "エラーが発生しました"
+                
                 finally:
+                    # 処理完了フラグ設定
                     st.session_state.processing = False
                     st.session_state.reset_processing = True
-                    st.rerun()
+                    
+                    # 安全な再描画のために、フラグ経由でrerunを指示
+                    st.session_state.need_rerun = True
             
-            threading.Thread(target=run_workflow, daemon=True).start()
+            # デーモンスレッドとして実行（メインスレッドが終了したらバックグラウンドも終了）
+            workflow_thread = threading.Thread(target=run_workflow, daemon=True)
+            workflow_thread.start()
+            
+            # 最初のUI更新を即座に行う
+            st.rerun()
     
     # 処理中の表示
     with progress_status_container:
@@ -359,35 +394,36 @@ def render_main_ui():
             display_dialog_history(st.session_state.current_dialog_history)
         else:
             st.info("対話履歴はまだありません。ワークフローを実行すると、ここに対話の流れが表示されます。")
-        # 最終結果の表示（処理完了後）
-        if not st.session_state.processing and 'result_placeholder' in st.session_state:
-            with st.session_state.result_placeholder:
-                final_state = st.session_state.final_state
-                if "title" in final_state and "final_summary" in final_state:
-                    st.markdown(f"""
-                    <div class="result-card">
-                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <div style="background-color: #00796B; color: white; width: 32px; height: 32px; 
-                                        border-radius: 50%; display: flex; align-items: center; justify-content: center; 
-                                        margin-right: 10px;">✓</div>
-                            <span style="color: #00796B; font-weight: bold;">処理が完了しました (100%)</span>
-                        </div>
-                        <h2>{final_state['title']}</h2>
-                         <div style="padding: 1rem; background-color: #f9f9f9; border-radius: 6px; margin-top: 1rem;">
-                        {final_state["final_summary"]}
-                        </div>
+    
+    # 最終結果の表示（処理完了後）
+    if not st.session_state.processing and 'result_placeholder' in st.session_state:
+        with st.session_state.result_placeholder:
+            final_state = st.session_state.final_state
+            if "title" in final_state and "final_summary" in final_state:
+                st.markdown(f"""
+                <div class="result-card">
+                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                        <div style="background-color: #00796B; color: white; width: 32px; height: 32px; 
+                                    border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+                                    margin-right: 10px;">✓</div>
+                        <span style="color: #00796B; font-weight: bold;">処理が完了しました (100%)</span>
                     </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    # 結果が得られなかった場合は表示しない
-                    if final_state and any(k for k in final_state.keys() if k not in ["dialog_history", "transcript"]):
-                        st.warning("処理は完了しましたが、完全な結果が得られませんでした。")
-                        st.json({k: v for k, v in final_state.items() if k not in ["dialog_history", "transcript"]})
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        if 'error_message' in st.session_state:
-            st.error(st.session_state.error_message)
+                    <h2>{final_state['title']}</h2>
+                    <div style="padding: 1rem; background-color: #f9f9f9; border-radius: 6px; margin-top: 1rem;">
+                        {final_state["final_summary"]}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                # 結果が得られなかった場合は表示しない
+                if final_state and any(k for k in final_state.keys() if k not in ["dialog_history", "transcript"]):
+                    st.warning("処理は完了しましたが、完全な結果が得られませんでした。")
+                    st.json({k: v for k, v in final_state.items() if k not in ["dialog_history", "transcript"]})
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    if st.session_state.error_message:
+        st.error(st.session_state.error_message)
 
 
 if __name__ == "__main__":
