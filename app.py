@@ -263,30 +263,25 @@ def render_main_ui():
                 try:
                     # 各ステップの実行を段階的に表示
                     progress_value = 10
-                    for event_type, data in graph.stream(initial_state):
-                        if event_type == "on_chain_start":
-                            # ノード実行開始時
-                            node_name = data.get("current_node", "")
-                            st.session_state.debug_info.append(f"ノード {node_name} の実行開始")
-                            st.session_state.latest_action = get_node_description(node_name)
-                            progress_value += 5
-                            progress_bar.progress(min(progress_value, 95))
-                            status_text.info(f"{st.session_state.latest_action}")
-                            
-                        elif event_type == "on_chain_end":
-                            # ノード実行終了時
-                            node_name = data.get("current_node", "")
-                            st.session_state.debug_info.append(f"ノード {node_name} の実行完了")
+                    for event in graph.stream(initial_state):
+                        # イベントを直接使用
+                        st.session_state.debug_info.append(f"イベント: {event}")
+                        
+                        # イベントの構造を確認
+                        if isinstance(event, dict):
+                            # イベントが直接状態の辞書の場合
+                            node_name = event.get("current_node", "")
+                            st.session_state.debug_info.append(f"ノード {node_name} の処理")
                             
                             # 状態を更新
-                            st.session_state.final_state = data.copy()
-                            if "dialog_history" in data:
-                                st.session_state.current_dialog_history = data["dialog_history"].copy()
+                            st.session_state.final_state = event.copy()
+                            if "dialog_history" in event:
+                                st.session_state.current_dialog_history = event["dialog_history"].copy()
                                 
                             # 進捗を更新
                             progress_value += 10
                             progress_bar.progress(min(progress_value, 95))
-                            status_text.success(f"{get_node_description(node_name)} (完了)")
+                            status_text.info(f"{get_node_description(node_name)} 処理中")
                             
                             # 画面更新のための短い待機
                             time.sleep(0.5)
