@@ -26,7 +26,7 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
     ]
     
     # メインワークフローステップの表示
-    st.write("### ワークフロー進行状況")
+    st.write("ワークフロー進行状況")
     cols = st.columns(5)
     
     # 各ノードを表示
