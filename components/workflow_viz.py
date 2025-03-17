@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 
 def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[str] = None):
     """
-    テキスト主体のシンプルなワークフロー可視化
+    テキスト主体のシンプルなワークフロー可視化（位置調整版）
     
     Args:
         state: 現在の状態
@@ -54,8 +54,8 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
                 unsafe_allow_html=True
             )
     
-    # ワークフローの説明をテキストのみで表示
-    st.write("ワークフローの流れ")
+    # ワークフローの説明をテキストのみで表示（見出しレベルと位置を調整）
+    st.markdown("### ワークフローの流れ")
     
     st.markdown(
         """
@@ -72,7 +72,7 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
     )
     
     # 現在の状況を表示
-    st.write("### 現在の状態")
+    st.markdown("### 現在の状態")
     
     current_status = ""
     if active_node == "start":
