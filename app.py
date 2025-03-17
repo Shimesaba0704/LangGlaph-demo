@@ -183,14 +183,9 @@ def render_main_ui():
                 
                 threading.Thread(target=run_workflow, daemon=True).start()
         
-        # processing が真の場合は、1秒待機後にスクリプトを再実行（auto refresh）
+        # processing が真の場合は、meta refresh タグを挿入してページをリロード
         if st.session_state.processing:
-            time.sleep(1)
-            # st.experimental_rerun() が利用可能か確認
-            if hasattr(st, "experimental_rerun"):
-                st.experimental_rerun()
-            else:
-                st.write("自動更新機能はご利用の Streamlit バージョンではサポートされていません。Streamlit のアップデートをご検討ください。")
+            st.markdown("<meta http-equiv='refresh' content='1'>", unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
     
