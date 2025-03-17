@@ -53,6 +53,27 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]]):
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+def update_dialog_display(placeholder, dialog_history: List[Dict[str, Any]], last_displayed_index: int = 0):
+    """
+    増分更新で対話履歴を表示
+    
+    Args:
+        placeholder: Streamlitのプレースホルダ
+        dialog_history: 対話履歴の全リスト
+        last_displayed_index: 最後に表示されたインデックス
+    """
+    # 新しいメッセージがない場合は更新しない
+    if len(dialog_history) <= last_displayed_index:
+        return
+        
+    # プレースホルダを使って表示を更新
+    with placeholder.container():
+        st.subheader("エージェント対話履歴 (リアルタイム)")
+        
+        # 全履歴を表示
+        display_dialog_history(dialog_history)
+
+
 def add_to_dialog_history(state: Dict[str, Any], agent_type: str, content: str) -> Dict[str, Any]:
     """対話履歴に新しいエントリを追加"""
     if "dialog_history" not in state:
