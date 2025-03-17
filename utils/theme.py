@@ -300,6 +300,32 @@ def setup_langgraph_theme():
     .stSelectbox label p {
         color: white !important;
     }
+
+        .progress-bar {
+        height: 6px;
+        background-color: #f0f0f0;
+        border-radius: 3px;
+        margin-top: 8px;
+        overflow: hidden;
+    }
+    .progress-value {
+        height: 100%;
+        background-color: #00796B;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+    /* アニメーション関連のスタイルも追加 */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in {
+        animation: fadeIn 0.5s ease-out forwards;
+    }
+    .new-message {
+        border-left-width: 3px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
                 
     </style>
     
