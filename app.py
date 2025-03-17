@@ -360,18 +360,36 @@ def render_main_ui():
         else:
             st.info("対話履歴はまだありません。ワークフローを実行すると、ここに対話の流れが表示されます。")
         # 最終結果の表示（処理完了後）
-    if not st.session_state.processing and 'result_placeholder' in st.session_state:
-        with st.session_state.result_placeholder:
-            final_state = st.session_state.final_state
-            if "title" in final_state and "final_summary" in final_state:
-                st.markdown(f"""
-                <div class="result-card">
-                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                        <div style="background-color: #00796B; color: white; width: 32px; height: 32px; 
-                                    border-radius: 50%; display: flex; align-items: center; justify-content: center; 
-                                    margin-right: 10px;">✓</div>
-                        <span style="color: #00796B; font-weight: bold;">処理が完了しました (100%)</span>
+        if not st.session_state.processing and 'result_placeholder' in st.session_state:
+            with st.session_state.result_placeholder:
+                final_state = st.session_state.final_state
+                if "title" in final_state and "final_summary" in final_state:
+                    st.markdown(f"""
+                    <div class="result-card">
+                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <div style="background-color: #00796B; color: white; width: 32px; height: 32px; 
+                                        border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+                                        margin-right: 10px;">✓</div>
+                            <span style="color: #00796B; font-weight: bold;">処理が完了しました (100%)</span>
+                        </div>
+                        <h2>{final_state['title']}</h2>
+                         <div style="padding: 1rem; background-color: #f9f9f9; border-radius: 6px; margin-top: 1rem;">
+                        {final_state["final_summary"]}
+                        </div>
                     </div>
-                    <h2>{final_state['title']}</h2>
-                    <div style="padding: 1rem; background-color: #f9f9f9; border-radius: 6px; margin-top: 1rem;">
-                        {f
+                    """, unsafe_allow_html=True)
+                else:
+                    # 結果が得られなかった場合は表示しない
+                    if final_state and any(k for k in final_state.keys() if k not in ["dialog_history", "transcript"]):
+                        st.warning("処理は完了しましたが、完全な結果が得られませんでした。")
+                        st.json({k: v for k, v in final_state.items() if k not in ["dialog_history", "transcript"]})
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        if 'error_message' in st.session_state:
+            st.error(st.session_state.error_message)
+
+
+if __name__ == "__main__":
+    render_sidebar()
+    render_main_ui()
