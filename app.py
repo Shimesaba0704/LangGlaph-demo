@@ -9,7 +9,7 @@ setup_langgraph_theme()
 
 from components.sidebar import render_sidebar
 from components.workflow_viz import render_workflow_visualization
-from components.dialog_history import display_dialog_history, add_to_dialog_history
+from components.dialog_history import display_dialog_history, add_to_dialog_history, update_dialog_display
 
 from utils.api_client import initialize_client, get_client
 initialize_client()
@@ -90,15 +90,21 @@ def render_main_ui():
             label_visibility="collapsed"
         )
         
-        # 対話履歴表示用のコンテナを準備
-        dialog_container = st.container()
+        # 対話履歴表示用のプレースホルダを準備
+        if 'dialog_placeholder' not in st.session_state:
+            st.session_state.dialog_placeholder = st.empty()
         
-        # 結果表示用のコンテナを準備
-        result_container = st.container()
+        # 結果表示用のプレースホルダを準備
+        if 'result_placeholder' not in st.session_state:
+            st.session_state.result_placeholder = st.empty()
         
         # セッション状態の初期化（リアルタイム表示用）
         if 'current_dialog_history' not in st.session_state:
             st.session_state.current_dialog_history = []
+            
+        # 最後に表示した対話履歴の長さを追跡
+        if 'last_displayed_history_length' not in st.session_state:
+            st.session_state.last_displayed_history_length = 0
         
         # 実行ボタン
         if st.button("実行", key="run_button", use_container_width=True):
@@ -111,6 +117,7 @@ def render_main_ui():
                 
                 # 実行前に対話履歴をクリア
                 st.session_state.current_dialog_history = []
+                st.session_state.last_displayed_history_length = 0
                 
                 # 初期状態の作成
                 initial_state = create_initial_state(user_input)
@@ -125,34 +132,34 @@ def render_main_ui():
                 # 最初の対話履歴を表示
                 st.session_state.current_dialog_history = initial_state["dialog_history"]
                 
-                with dialog_container:
+                with st.session_state.dialog_placeholder.container():
                     st.subheader("エージェント対話履歴 (リアルタイム)")
                     display_dialog_history(st.session_state.current_dialog_history)
+                    st.session_state.last_displayed_history_length = len(st.session_state.current_dialog_history)
                 
                 # 最終状態を追跡する変数
                 final_state = initial_state.copy()
                 
-                # ★イベントハンドラ設定
+                # イベントハンドラ設定 (改修ポイント)
                 def update_ui(event_type, data):
-                    # on_node_yieldを拾って都度ログを更新（改修ポイント）
-                    if event_type == "on_node_yield" and "state" in data:
+                    # on_node_yieldとon_node_endを拾って増分更新
+                    if (event_type == "on_node_yield" or event_type == "on_node_end") and "state" in data:
                         node_state = data["state"]
                         if "dialog_history" in node_state:
-                            st.session_state.current_dialog_history = node_state["dialog_history"]
-                            with dialog_container:
-                                st.subheader("エージェント対話履歴 (リアルタイム)")
-                                display_dialog_history(st.session_state.current_dialog_history)
-                            # ここで再描画
-                            st.experimental_rerun()
-                    
-                    if event_type == "on_node_end" and "state" in data:
-                        node_state = data["state"]
-                        if "dialog_history" in node_state:
-                            st.session_state.current_dialog_history = node_state["dialog_history"]
-                            final_state.update(node_state)
-                            with dialog_container:
-                                st.subheader("エージェント対話履歴 (リアルタイム)")
-                                display_dialog_history(st.session_state.current_dialog_history)
+                            current_history = node_state["dialog_history"]
+                            st.session_state.current_dialog_history = current_history
+                            
+                            # 増分更新 - 前回表示以降の新しいメッセージのみを更新
+                            update_dialog_display(
+                                st.session_state.dialog_placeholder,
+                                current_history,
+                                st.session_state.last_displayed_history_length
+                            )
+                            st.session_state.last_displayed_history_length = len(current_history)
+                            
+                            # 最終ノードの場合は状態を更新
+                            if event_type == "on_node_end":
+                                final_state.update(node_state)
                 
                 config = {
                     "configurable": {"thread_id": "1"},
@@ -171,7 +178,7 @@ def render_main_ui():
                 st.success("処理完了！")
                 
                 # 最終結果の表示
-                with result_container:
+                with st.session_state.result_placeholder.container():
                     if "title" in final_state and "final_summary" in final_state:
                         st.markdown(f"""
                         <div class="result-card">
