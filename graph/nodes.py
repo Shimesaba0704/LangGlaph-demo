@@ -28,22 +28,46 @@ def node_summarize(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state, 
         "system", 
-        f"要約エージェントが要約を作成 (第{state['revision_count']}版)"
+        f"要約エージェントが要約を作成 (第{state['revision_count']}版)",
+        progress=10  # 進捗状況の追加（10%）
     )
     
     # 開始メッセージ
     state = add_to_dialog_history(
         state, 
         "summarizer", 
-        "要約を生成します..."
+        "要約を生成しています...",
+        progress=20  # 進捗状況の追加（20%）
     )
     # 状態を返してUIを更新
     yield state
     
     # 1回目の要約かどうかで処理を分岐
+    state = add_to_dialog_history(
+        state, 
+        "summarizer", 
+        "テキストを分析中...",
+        progress=30  # 進捗状況の追加（30%）
+    )
+    yield state
+    
     if state["revision_count"] == 1:
+        state = add_to_dialog_history(
+            state, 
+            "summarizer", 
+            "初回の要約を作成中...",
+            progress=40  # 進捗状況の追加（40%）
+        )
+        yield state
         summary = agent.call(state["input_text"])
     else:
+        state = add_to_dialog_history(
+            state, 
+            "summarizer", 
+            f"フィードバックを基に要約を改善中...",
+            progress=40  # 進捗状況の追加（40%）
+        )
+        yield state
         summary = agent.refine(state["input_text"], state["feedback"])
     
     state["summary"] = summary
@@ -52,7 +76,8 @@ def node_summarize(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state, 
         "summarizer", 
-        f"【要約 第{state['revision_count']}版】\n{summary}"
+        f"【要約 第{state['revision_count']}版】\n{summary}",
+        progress=60  # 進捗状況の追加（60%）
     )
     # 状態を返してUIを更新
     yield state
@@ -76,16 +101,27 @@ def node_review(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state, 
         "system", 
-        f"批評エージェントが要約レビューを実施"
+        f"批評エージェントが要約レビューを実施",
+        progress=65  # 進捗状況の追加（65%）
     )
     
     # 開始メッセージ
     state = add_to_dialog_history(
         state, 
         "reviewer", 
-        "レビューを実施しています..."
+        "レビューを実施しています...",
+        progress=70  # 進捗状況の追加（70%）
     )
     # 状態を返してUIを更新
+    yield state
+    
+    # レビュー進行中メッセージ
+    state = add_to_dialog_history(
+        state, 
+        "reviewer", 
+        "要約の品質を評価中...",
+        progress=75  # 進捗状況の追加（75%）
+    )
     yield state
     
     # 最終レビューかどうか
@@ -107,7 +143,8 @@ def node_review(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state,
         "reviewer",
-        f"【フィードバック】\n{feedback}"
+        f"【フィードバック】\n{feedback}",
+        progress=80  # 進捗状況の追加（80%）
     )
     
     # 承認判定
@@ -119,7 +156,8 @@ def node_review(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state,
         "reviewer",
-        f"【判定】{judge_msg}"
+        f"【判定】{judge_msg}",
+        progress=85  # 進捗状況の追加（85%）
     )
     # 状態を返してUIを更新
     yield state
@@ -143,16 +181,27 @@ def node_title(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state, 
         "system", 
-        "タイトル命名エージェントがタイトルを生成します"
+        "タイトル命名エージェントがタイトルを生成します",
+        progress=87  # 進捗状況の追加（87%）
     )
     
     # 開始メッセージ
     state = add_to_dialog_history(
         state, 
         "title", 
-        "タイトルを生成しています..."
+        "タイトルを生成しています...",
+        progress=90  # 進捗状況の追加（90%）
     )
     # 状態を返してUIを更新
+    yield state
+    
+    # 進捗メッセージ追加
+    state = add_to_dialog_history(
+        state, 
+        "title", 
+        "要約内容からタイトルを検討中...",
+        progress=93  # 進捗状況の追加（93%）
+    )
     yield state
     
     # タイトル生成
@@ -165,14 +214,16 @@ def node_title(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state,
         "title",
-        f"【生成タイトル】『{state['title']}』"
+        f"【生成タイトル】『{state['title']}』",
+        progress=96  # 進捗状況の追加（96%）
     )
     
     # 処理完了
     state = add_to_dialog_history(
         state, 
         "system", 
-        "すべての処理が完了しました。"
+        "すべての処理が完了しました。",
+        progress=100  # 進捗状況の追加（100%）
     )
     # 状態を返してUIを更新
     yield state
