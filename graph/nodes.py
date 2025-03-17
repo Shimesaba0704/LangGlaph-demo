@@ -5,7 +5,7 @@ from agents.summarizer import SummarizerAgent
 from agents.reviewer import ReviewerAgent
 from agents.title_writer import TitleCopywriterAgent
 from components.workflow_viz import render_workflow_visualization
-from components.dialog_history import add_to_dialog_history, update_progress
+from components.dialog_history import add_to_dialog_history
 from utils.state import State
 
 
@@ -19,31 +19,24 @@ def node_summarize(state: State) -> Generator[State, None, State]:
     # SummarizerAgentを呼び出す度に revision_count をインクリメント
     state["revision_count"] += 1
     
-    # システムメッセージを対話履歴に追加
-    state = add_to_dialog_history(
-        state, 
-        "system", 
-        f"要約エージェントが要約を作成 (第{state['revision_count']}版)",
-        progress=10
-    )
-    
     # ワークフロー図の可視化
     if "current_node" not in state or state["current_node"] != "summarize":
         state["current_node"] = "summarize"
         render_workflow_visualization(state, current_node="summarize")
     
-    # 開始メッセージ（進捗バー付き）
-    process_message_index = len(state["dialog_history"])
+    # システムメッセージを対話履歴に追加
+    state = add_to_dialog_history(
+        state, 
+        "system", 
+        f"要約エージェントが要約を作成 (第{state['revision_count']}版)"
+    )
+    
+    # 開始メッセージ
     state = add_to_dialog_history(
         state, 
         "summarizer", 
-        "要約を生成します...",
-        progress=20
+        "要約を生成します..."
     )
-    yield state
-    
-    # 進捗更新 (API準備)
-    state = update_progress(state, process_message_index, 40)
     yield state
     
     # 1回目の要約かどうかで処理を分岐
@@ -51,9 +44,6 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         summary = agent.call(state["input_text"])
     else:
         summary = agent.refine(state["input_text"], state["feedback"])
-    
-    # 進捗更新 (API完了)
-    state = update_progress(state, process_message_index, 100)
     
     state["summary"] = summary
     
@@ -84,22 +74,15 @@ def node_review(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state, 
         "system", 
-        f"批評エージェントが要約レビューを実施",
-        progress=10
+        f"批評エージェントが要約レビューを実施"
     )
     
-    # 開始メッセージ（進捗バー付き）
-    process_message_index = len(state["dialog_history"])
+    # 開始メッセージ
     state = add_to_dialog_history(
         state, 
         "reviewer", 
-        "レビューを実施しています...",
-        progress=20
+        "レビューを実施しています..."
     )
-    yield state
-    
-    # 進捗更新 (API準備)
-    state = update_progress(state, process_message_index, 40)
     yield state
     
     # 最終レビューかどうか
@@ -112,9 +95,6 @@ def node_review(state: State) -> Generator[State, None, State]:
         previous_feedback=state.get("previous_feedback", ""),
         is_final_review=is_final_review
     )
-    
-    # 進捗更新 (API完了)
-    state = update_progress(state, process_message_index, 100)
     
     state["feedback"] = feedback
     state["previous_summary"] = state["summary"]
@@ -159,29 +139,19 @@ def node_title(state: State) -> Generator[State, None, State]:
     state = add_to_dialog_history(
         state, 
         "system", 
-        "タイトル命名エージェントがタイトルを生成します",
-        progress=10
+        "タイトル命名エージェントがタイトルを生成します"
     )
     
-    # 開始メッセージ（進捗バー付き）
-    process_message_index = len(state["dialog_history"])
+    # 開始メッセージ
     state = add_to_dialog_history(
         state, 
         "title", 
-        "タイトルを生成しています...",
-        progress=20
+        "タイトルを生成しています..."
     )
-    yield state
-    
-    # 進捗更新 (API準備)
-    state = update_progress(state, process_message_index, 40)
     yield state
     
     # タイトル生成
     output = agent.call(state["input_text"], state.get("transcript", []), state["summary"])
-    
-    # 進捗更新 (API完了)
-    state = update_progress(state, process_message_index, 100)
     
     state["title"] = output.get("title", "")
     state["final_summary"] = output.get("summary", "")
