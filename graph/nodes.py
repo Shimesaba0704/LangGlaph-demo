@@ -40,11 +40,11 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         "要約を生成します...",
         progress=20
     )
-    yield state  # <-- UIを更新
+    yield state
     
     # 進捗更新 (API準備)
     state = update_progress(state, process_message_index, 40)
-    yield state  # <-- 進捗更新
+    yield state
     
     # 1回目の要約かどうかで処理を分岐
     if state["revision_count"] == 1:
@@ -53,14 +53,9 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         summary = agent.refine(state["input_text"], state["feedback"])
     
     # 進捗更新 (API完了)
-    state = update_progress(state, process_message_index, 90)
-    yield state  # <-- 進捗更新
+    state = update_progress(state, process_message_index, 100)
     
     state["summary"] = summary
-    
-    # 進捗更新 (完了)
-    state = update_progress(state, process_message_index, 100)
-    yield state  # <-- 進捗更新
     
     # エージェントの応答をログ
     state = add_to_dialog_history(
@@ -68,7 +63,7 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         "summarizer", 
         f"【要約 第{state['revision_count']}版】\n{summary}"
     )
-    yield state  # <-- 増分更新
+    yield state
     
     return state
 
@@ -101,11 +96,11 @@ def node_review(state: State) -> Generator[State, None, State]:
         "レビューを実施しています...",
         progress=20
     )
-    yield state  # <-- 増分更新
+    yield state
     
     # 進捗更新 (API準備)
     state = update_progress(state, process_message_index, 40)
-    yield state  # <-- 進捗更新
+    yield state
     
     # 最終レビューかどうか
     is_final_review = (state["revision_count"] >= 3)
@@ -119,16 +114,11 @@ def node_review(state: State) -> Generator[State, None, State]:
     )
     
     # 進捗更新 (API完了)
-    state = update_progress(state, process_message_index, 90)
-    yield state  # <-- 進捗更新
+    state = update_progress(state, process_message_index, 100)
     
     state["feedback"] = feedback
     state["previous_summary"] = state["summary"]
     state["previous_feedback"] = feedback
-    
-    # 進捗更新 (完了)
-    state = update_progress(state, process_message_index, 100)
-    yield state  # <-- 進捗更新
     
     # フィードバックをログ
     state = add_to_dialog_history(
@@ -136,7 +126,6 @@ def node_review(state: State) -> Generator[State, None, State]:
         "reviewer",
         f"【フィードバック】\n{feedback}"
     )
-    yield state  # <-- 増分更新
     
     # 承認判定
     is_approved = agent.check_approval(feedback, state["revision_count"])
@@ -149,7 +138,7 @@ def node_review(state: State) -> Generator[State, None, State]:
         "reviewer",
         f"【判定】{judge_msg}"
     )
-    yield state  # <-- 増分更新
+    yield state
     
     return state
 
@@ -182,25 +171,20 @@ def node_title(state: State) -> Generator[State, None, State]:
         "タイトルを生成しています...",
         progress=20
     )
-    yield state  # <-- 増分更新
+    yield state
     
     # 進捗更新 (API準備)
     state = update_progress(state, process_message_index, 40)
-    yield state  # <-- 進捗更新
+    yield state
     
     # タイトル生成
     output = agent.call(state["input_text"], state.get("transcript", []), state["summary"])
     
     # 進捗更新 (API完了)
-    state = update_progress(state, process_message_index, 90)
-    yield state  # <-- 進捗更新
+    state = update_progress(state, process_message_index, 100)
     
     state["title"] = output.get("title", "")
     state["final_summary"] = output.get("summary", "")
-    
-    # 進捗更新 (完了)
-    state = update_progress(state, process_message_index, 100)
-    yield state  # <-- 進捗更新
     
     # タイトル生成結果
     state = add_to_dialog_history(
@@ -208,7 +192,6 @@ def node_title(state: State) -> Generator[State, None, State]:
         "title",
         f"【生成タイトル】『{state['title']}』"
     )
-    yield state  # <-- 増分更新
     
     # 処理完了
     state = add_to_dialog_history(
@@ -216,7 +199,7 @@ def node_title(state: State) -> Generator[State, None, State]:
         "system", 
         "すべての処理が完了しました。"
     )
-    yield state  # <-- 増分更新
+    yield state
     
     # ワークフロー図の最終表示
     state["current_node"] = "END"
