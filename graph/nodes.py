@@ -274,3 +274,38 @@ def node_title(state: State) -> Generator[State, None, State]:
             "エラーが発生しましたが、処理を完了します。",
             progress=100  # エラー時も完了として扱う
         )
+    
+    # 状態を返してUIを更新
+    yield state
+    
+    # 完了状態に移行
+    state["current_node"] = "END"
+    # レンダリングはメインスレッドで行うため、ここでは状態設定のみを行う
+    
+    return state
+
+
+def should_revise(state: State) -> str:
+    """
+    批評に基づいて次のステップを決定する条件分岐関数
+    
+    Args:
+        state: 現在の状態
+        
+    Returns:
+        str: 次のノード名
+    """
+    # エラーが発生した場合は直接タイトル生成へ進む
+    if "error" in state:
+        return "title_node"
+        
+    # 最大改訂回数を超えている場合は次のステップへ
+    if state["revision_count"] >= 3:
+        return "title_node"
+    
+    # 承認されていない場合は要約をやり直す
+    if not state.get("approved", False):
+        return "summarize"
+    
+    # 承認された場合はタイトル生成へ進む
+    return "title_node"
