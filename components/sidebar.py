@@ -8,7 +8,7 @@ def render_sidebar():
     # Deepseekロゴをシンプルに表示
     st.sidebar.markdown("""
     <div style="text-align: center; margin: 1.5rem 0;">
-        <img src="https://www.deepseek.com/_next/image?url=https%3A%2F%2Fcdn.deepseek.com%2Flogo.png&w=1920&q=75" width="160" alt="LangGraph Logo" style="filter: brightness(1.2);">
+        <img src="https://www.deepseek.com/_next/image?url=https%3A%2F%2Fcdn.deepseek.com%2Flogo.png&w=1920&q=75" width="160" alt="Deepseek Logo" style="filter: brightness(1.2);">
     </div>
     """, unsafe_allow_html=True)
     
