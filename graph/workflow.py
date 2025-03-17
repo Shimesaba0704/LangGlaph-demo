@@ -37,7 +37,11 @@ def create_workflow_graph():
     builder.add_edge("title_node", END)
     
     # チェックポイント設定とグラフのコンパイル
-    memory = MemorySaver()
+    # 修正: チェックポインターの設定に必要なパラメータを追加
+    memory = MemorySaver(checkpoint_id="summarize_workflow")
+    # または
+    # memory = MemorySaver(thread_id="default_thread")
+    
     compiled_graph = builder.compile(checkpointer=memory)
     
     return compiled_graph
