@@ -1,6 +1,7 @@
 import streamlit as st
 from dotenv import load_dotenv
 from auth import auth_required
+import time
 
 load_dotenv()
 
@@ -105,12 +106,19 @@ def render_main_ui():
         # 最後に表示した対話履歴の長さを追跡
         if 'last_displayed_history_length' not in st.session_state:
             st.session_state.last_displayed_history_length = 0
+            
+        # 処理中フラグ
+        if 'processing' not in st.session_state:
+            st.session_state.processing = False
         
         # 実行ボタン
-        if st.button("実行", key="run_button", use_container_width=True):
+        if st.button("実行", key="run_button", use_container_width=True, disabled=st.session_state.processing):
             if not user_input:
                 st.error("文章が入力されていません。")
             else:
+                # 処理中フラグをセット
+                st.session_state.processing = True
+                
                 # グラフを取得
                 graph = create_workflow_graph()
                 client = get_client()
@@ -140,7 +148,7 @@ def render_main_ui():
                 # 最終状態を追跡する変数
                 final_state = initial_state.copy()
                 
-                # イベントハンドラ設定 (改修ポイント)
+                # イベントハンドラ設定 (増分更新)
                 def update_ui(event_type, data):
                     # on_node_yieldとon_node_endを拾って増分更新
                     if (event_type == "on_node_yield" or event_type == "on_node_end") and "state" in data:
@@ -149,7 +157,7 @@ def render_main_ui():
                             current_history = node_state["dialog_history"]
                             st.session_state.current_dialog_history = current_history
                             
-                            # 増分更新 - 前回表示以降の新しいメッセージのみを更新
+                            # 進捗状況も含めて増分更新
                             update_dialog_display(
                                 st.session_state.dialog_placeholder,
                                 current_history,
@@ -157,9 +165,12 @@ def render_main_ui():
                             )
                             st.session_state.last_displayed_history_length = len(current_history)
                             
-                            # 最終ノードの場合は状態を更新
+                            # ノードが完了した場合は状態を更新
                             if event_type == "on_node_end":
                                 final_state.update(node_state)
+                                
+                                # 少し待機して進捗の視覚的効果を確認できるようにする
+                                time.sleep(0.3)
                 
                 config = {
                     "configurable": {"thread_id": "1"},
@@ -174,6 +185,9 @@ def render_main_ui():
                     except Exception as e:
                         st.error(f"処理中にエラーが発生しました: {str(e)}")
                         st.exception(e)
+                    finally:
+                        # 処理完了後、フラグをリセット
+                        st.session_state.processing = False
                 
                 st.success("処理完了！")
                 
