@@ -293,7 +293,7 @@ def apply_theme_styles():
         color: white !important;
     }
 
-        .progress-bar {
+    .progress-bar {
         height: 6px;
         background-color: #f0f0f0;
         border-radius: 3px;
@@ -318,5 +318,5 @@ def apply_theme_styles():
         border-left-width: 3px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-</document_content>
-</document>
+    </style>
+    """, unsafe_allow_html=True)
