@@ -4,9 +4,9 @@ from typing import Dict, Any, List, Optional
 import html
 import re
 
-def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: bool = False, last_displayed_index: int = 0):
+def display_dialog_history(dialog_history: List[Dict[str, Any]]):
     """
-    タイムライン形式で対話履歴を表示
+    シンプルなタイムライン形式で対話履歴を表示（増分更新なし）
     """
     if not dialog_history:
         st.info("対話履歴はまだありません。ワークフローを実行すると、ここに対話の流れが表示されます。")
@@ -79,25 +79,13 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
             height: 100%;
             background-color: #00796B;
             border-radius: 3px;
-            transition: width 0.3s ease;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-        .new-message {
-            border-left-width: 3px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         </style>
         """, unsafe_allow_html=True)
         st.session_state.timeline_style_added = True
     
     # 各メッセージを個別に表示
-    for i, dialog in enumerate(dialog_history):
+    for dialog in dialog_history:
         agent_type = dialog.get("agent_type", "unknown")
         content = dialog.get("content", "")
         timestamp = dialog.get("timestamp", "")
@@ -107,10 +95,6 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         
         # HTMLエスケープ処理
         content = html.escape(content)
-        
-        # 新しいメッセージのハイライト
-        is_new = highlight_new and i >= last_displayed_index
-        new_class = "new-message" if is_new else ""
         
         # エージェント毎のアイコンとクラス設定
         if agent_type == "summarizer":
@@ -140,16 +124,14 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
             progress = dialog["progress"]
             progress_html = f'<div class="progress-bar"><div class="progress-value" style="width: {progress}%"></div></div>'
         
-        animation_class = "fade-in" if is_new else ""
-        
         # 改行をHTML改行タグに変換
         content = content.replace('\n', '<br>')
         
         st.markdown(
             f"""
             <div class="timeline-container">
-                <div class="timeline-item {animation_class}">
-                    <div class="timeline-content {agent_class} {new_class}">
+                <div class="timeline-item">
+                    <div class="timeline-content {agent_class}">
                         <div class="agent-name">
                             <span class="agent-icon">{icon}</span> {agent_name}
                             <span style="float: right; font-size: 0.8rem; color: #888;">{timestamp}</span>
@@ -164,21 +146,15 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         )
 
 
-def update_dialog_display(placeholder, dialog_history: List[Dict[str, Any]], last_displayed_index: int = 0):
-    with placeholder:
-        display_dialog_history(
-            dialog_history, 
-            highlight_new=True, 
-            last_displayed_index=last_displayed_index
-        )
-
-
 def add_to_dialog_history(
     state: Dict[str, Any], 
     agent_type: str, 
     content: str, 
     progress: Optional[int] = None
 ) -> Dict[str, Any]:
+    """
+    対話履歴にメッセージを追加
+    """
     if "dialog_history" not in state:
         state["dialog_history"] = []
     
@@ -200,6 +176,9 @@ def update_progress(
     index: int, 
     progress: int
 ) -> Dict[str, Any]:
+    """
+    指定されたインデックスのメッセージの進捗を更新
+    """
     if "dialog_history" in state and 0 <= index < len(state["dialog_history"]):
         state["dialog_history"][index]["progress"] = progress
     return state
