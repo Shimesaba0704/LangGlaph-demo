@@ -1,149 +1,68 @@
 import streamlit as st
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-import html
-import re
 
 def display_dialog_history(dialog_history: List[Dict[str, Any]]):
     """
-    シンプルなタイムライン形式で対話履歴を表示（増分更新なし）
+    シンプルな形式で対話履歴を表示
     """
     if not dialog_history:
         st.info("対話履歴はまだありません。ワークフローを実行すると、ここに対話の流れが表示されます。")
         return
     
-    # タイムラインスタイルの定義（一度だけ）
-    if "timeline_style_added" not in st.session_state:
-        st.markdown("""
-        <style>
-        .timeline-container {
-            position: relative;
-            padding-left: 2rem;
-            margin-bottom: 1rem;
-        }
-        .timeline-container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0.5rem;
-            height: 100%;
-            width: 2px;
-            background-color: #ddd;
-        }
-        .timeline-item {
-            position: relative;
-            margin-bottom: 1.5rem;
-        }
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: -2rem;
-            top: 0.25rem;
-            width: 1rem;
-            height: 1rem;
-            border-radius: 50%;
-            background-color: #00796B;
-        }
-        .timeline-content {
-            padding: 0.75rem;
-            border-radius: 8px;
-            background-color: white;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-        .agent-name {
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-        .agent-icon {
-            font-size: 1.2rem;
-            margin-right: 0.5rem;
-            vertical-align: middle;
-        }
-        .agent-summarizer {
-            border-left: 3px solid #009688;
-        }
-        .agent-reviewer {
-            border-left: 3px solid #673AB7;
-        }
-        .agent-title {
-            border-left: 3px solid #FF5722;
-        }
-        .progress-bar {
-            height: 6px;
-            background-color: #f0f0f0;
-            border-radius: 3px;
-            margin-top: 8px;
-            overflow: hidden;
-        }
-        .progress-value {
-            height: 100%;
-            background-color: #00796B;
-            border-radius: 3px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        st.session_state.timeline_style_added = True
-    
-    # 各メッセージを個別に表示
+    # 各エージェントごとに色分けされた簡易表示
     for dialog in dialog_history:
         agent_type = dialog.get("agent_type", "unknown")
         content = dialog.get("content", "")
         timestamp = dialog.get("timestamp", "")
         
-        # HTMLタグ（<div>タグ）を大文字小文字を無視して除去
-        content = re.sub(r'</?div[^>]*>', '', content, flags=re.IGNORECASE)
-        
-        # HTMLエスケープ処理
-        content = html.escape(content)
-        
-        # エージェント毎のアイコンとクラス設定
+        # エージェント毎の設定
         if agent_type == "summarizer":
-            icon = "📝"
-            agent_class = "agent-summarizer"
+            emoji = "📝"
             agent_name = "要約者"
+            bg_color = "#E0F2F1"
+            border_color = "#009688"
         elif agent_type == "reviewer":
-            icon = "⭐"
-            agent_class = "agent-reviewer"
+            emoji = "⭐"
             agent_name = "批評家"
+            bg_color = "#EDE7F6"
+            border_color = "#673AB7"
         elif agent_type == "title":
-            icon = "🏷️"
-            agent_class = "agent-title"
+            emoji = "🏷️"
             agent_name = "タイトル作成者"
+            bg_color = "#FBE9E7"
+            border_color = "#FF5722"
         elif agent_type == "system":
-            icon = "🔄"
-            agent_class = ""
+            emoji = "🔄"
             agent_name = "システム"
+            bg_color = "#F5F5F5"
+            border_color = "#9E9E9E"
         else:
-            icon = "💬"
-            agent_class = ""
+            emoji = "💬"
             agent_name = "不明なエージェント"
+            bg_color = "#F5F5F5"
+            border_color = "#9E9E9E"
         
-        # 進捗情報の表示
-        progress_html = ""
-        if "progress" in dialog and dialog["progress"]:
-            progress = dialog["progress"]
-            progress_html = f'<div class="progress-bar"><div class="progress-value" style="width: {progress}%"></div></div>'
+        # メッセージコンテナの表示
+        st.markdown(f"**{emoji} {agent_name}** - *{timestamp}*")
         
-        # 改行をHTML改行タグに変換
-        content = content.replace('\n', '<br>')
-        
+        # シンプルな枠線付きエリアでコンテンツを表示
         st.markdown(
             f"""
-            <div class="timeline-container">
-                <div class="timeline-item">
-                    <div class="timeline-content {agent_class}">
-                        <div class="agent-name">
-                            <span class="agent-icon">{icon}</span> {agent_name}
-                            <span style="float: right; font-size: 0.8rem; color: #888;">{timestamp}</span>
-                        </div>
-                        <div>{content}</div>
-                        {progress_html}
-                    </div>
-                </div>
+            <div style="padding: 10px; background-color: {bg_color}; 
+                        border-left: 3px solid {border_color}; 
+                        margin-bottom: 15px; border-radius: 0 5px 5px 0;">
+                {content}
             </div>
-            """,
+            """, 
             unsafe_allow_html=True
         )
+        
+        # 進捗バーがあれば表示（オプション）
+        if "progress" in dialog and dialog["progress"]:
+            progress = dialog["progress"]
+            # 進捗バーはStreamlitのコンポーネントを使用
+            st.progress(progress / 100)
 
 
 def add_to_dialog_history(
@@ -158,8 +77,6 @@ def add_to_dialog_history(
     if "dialog_history" not in state:
         state["dialog_history"] = []
     
-    # <div>タグの除去（大文字小文字問わず）
-    content = re.sub(r'</?div[^>]*>', '', content, flags=re.IGNORECASE)
     timestamp = datetime.now().strftime("%H:%M:%S")
     state["dialog_history"].append({
         "agent_type": agent_type,
