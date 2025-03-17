@@ -31,7 +31,7 @@ def render_main_ui():
     </div>
     """, unsafe_allow_html=True)
     
-    # セッション状態の初期化（タブ追跡用）
+    # タブインデックスの初期化
     if 'active_tab' not in st.session_state:
         st.session_state.active_tab = 0
     
@@ -55,15 +55,21 @@ def render_main_ui():
     if 'processing' not in st.session_state:
         st.session_state.processing = False
     
-    # タブの作成
-    tabs = st.tabs(["ワークフロー実行", "対話ログ"])
+    # タブの切り替え用のラジオボタン（非表示）
+    tab_selection = st.radio(
+        "表示タブを選択",
+        ["ワークフロー実行", "対話ログ"],
+        key="tab_selector",
+        index=st.session_state.active_tab,
+        label_visibility="collapsed",
+        horizontal=True
+    )
     
-    # タブ選択時の処理
-    def handle_tab_change():
-        for i, tab in enumerate(tabs):
-            if tab._is_focused():
-                st.session_state.active_tab = i
-                break
+    # ラジオボタンの選択からアクティブタブを更新
+    st.session_state.active_tab = 0 if tab_selection == "ワークフロー実行" else 1
+    
+    # タブの作成（通常のタブUIを表示するためだけに使用）
+    tabs = st.tabs(["ワークフロー実行", "対話ログ"])
     
     # タブ1: ワークフロー実行
     with tabs[0]:
@@ -185,7 +191,7 @@ def render_main_ui():
                                         last_displayed_index=st.session_state.last_displayed_history_length
                                     )
                                 
-                                # タブ2の更新はタブ2が表示されている場合のみ
+                                # タブ2の更新はセッションステートで管理されたコンテナを使用
                                 if 'dialog_placeholder_tab2' in st.session_state and st.session_state.dialog_placeholder_tab2:
                                     with st.session_state.dialog_placeholder_tab2:
                                         display_dialog_history(
@@ -268,8 +274,6 @@ def render_main_ui():
                 else:
                     st.info("実行履歴がありません。ワークフローを実行すると、ここに履歴が表示されます。")
 
-    # タブの変更を検知
-    handle_tab_change()
 
 # サイドバーとメインUIの描画
 if __name__ == "__main__":
