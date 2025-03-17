@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+import html
 
 
 def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: bool = False, last_displayed_index: int = 0):
@@ -22,6 +23,9 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         agent_type = dialog.get("agent_type", "unknown")
         content = dialog.get("content", "")
         timestamp = dialog.get("timestamp", "")
+        
+        # HTMLタグをエスケープ処理
+        content = html.escape(content)
         
         # 新しいメッセージ用のクラス
         is_new = highlight_new and i >= last_displayed_index
@@ -57,6 +61,9 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
         
         # 新しいメッセージにはアニメーションエフェクトを追加
         animation_class = "fade-in" if is_new else ""
+        
+        # 改行をHTML改行タグに変換
+        content = content.replace('\n', '<br>')
         
         st.markdown(f'''
         <div class="timeline-item {animation_class}">
