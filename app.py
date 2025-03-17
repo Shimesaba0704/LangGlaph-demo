@@ -263,17 +263,19 @@ def render_main_ui():
                 try:
                     # 各ステップの実行を段階的に表示
                     progress_value = 10
+                    last_state = initial_state.copy()  # 最後の状態を保持する変数
+                    
                     for event in graph.stream(initial_state):
                         # イベントを直接使用
-                        st.session_state.debug_info.append(f"イベント: {event}")
+                        st.session_state.debug_info.append(f"イベント受信: {type(event)}")
                         
                         # イベントの構造を確認
                         if isinstance(event, dict):
-                            # イベントが直接状態の辞書の場合
                             node_name = event.get("current_node", "")
                             st.session_state.debug_info.append(f"ノード {node_name} の処理")
                             
                             # 状態を更新
+                            last_state = event.copy()  # 最後の状態を保持
                             st.session_state.final_state = event.copy()
                             if "dialog_history" in event:
                                 st.session_state.current_dialog_history = event["dialog_history"].copy()
@@ -286,13 +288,13 @@ def render_main_ui():
                             # 画面更新のための短い待機
                             time.sleep(0.5)
                     
-                    # 最終結果の設定
+                    # 最終結果の設定（get_state()を使用しない）
                     st.session_state.debug_info.append("ワークフロー処理完了")
-                    final_result = graph.get_state()
-                    st.session_state.final_state = final_result.copy()
+                    # 最後に取得した状態を最終状態として使用
+                    st.session_state.final_state = last_state.copy()
                     
-                    if "dialog_history" in final_result:
-                        st.session_state.current_dialog_history = final_result["dialog_history"].copy()
+                    if "dialog_history" in last_state:
+                        st.session_state.current_dialog_history = last_state["dialog_history"].copy()
                     
                     progress_bar.progress(100)
                     status_text.success("処理が完了しました!")
