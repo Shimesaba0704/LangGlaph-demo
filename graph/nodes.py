@@ -37,6 +37,7 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         "summarizer", 
         "要約を生成します..."
     )
+    # 状態を返してUIを更新
     yield state
     
     # 1回目の要約かどうかで処理を分岐
@@ -53,6 +54,7 @@ def node_summarize(state: State) -> Generator[State, None, State]:
         "summarizer", 
         f"【要約 第{state['revision_count']}版】\n{summary}"
     )
+    # 状態を返してUIを更新
     yield state
     
     return state
@@ -83,6 +85,7 @@ def node_review(state: State) -> Generator[State, None, State]:
         "reviewer", 
         "レビューを実施しています..."
     )
+    # 状態を返してUIを更新
     yield state
     
     # 最終レビューかどうか
@@ -118,6 +121,7 @@ def node_review(state: State) -> Generator[State, None, State]:
         "reviewer",
         f"【判定】{judge_msg}"
     )
+    # 状態を返してUIを更新
     yield state
     
     return state
@@ -148,6 +152,7 @@ def node_title(state: State) -> Generator[State, None, State]:
         "title", 
         "タイトルを生成しています..."
     )
+    # 状態を返してUIを更新
     yield state
     
     # タイトル生成
@@ -169,6 +174,7 @@ def node_title(state: State) -> Generator[State, None, State]:
         "system", 
         "すべての処理が完了しました。"
     )
+    # 状態を返してUIを更新
     yield state
     
     # ワークフロー図の最終表示
