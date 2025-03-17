@@ -180,12 +180,10 @@ def render_main_ui():
                         st.session_state.error_message = f"処理中にエラーが発生しました: {str(e)}"
                     finally:
                         st.session_state.processing = False
+                        # 処理完了時に最終結果を表示
+                        st.rerun()
                 
                 threading.Thread(target=run_workflow, daemon=True).start()
-        
-        # processing が真の場合は、meta refresh タグを挿入してページをリロード
-        if st.session_state.processing:
-            st.markdown("<meta http-equiv='refresh' content='1'>", unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
     
