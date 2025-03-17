@@ -14,9 +14,174 @@ import time
 
 load_dotenv()
 
-from utils.theme import apply_theme_styles
-# テーマスタイルを適用
-apply_theme_styles()
+# CSSスタイルを直接適用
+st.markdown("""
+<style>
+/* カラー変数 */
+:root {
+    --primary: #004D40;
+    --secondary: #00796B;
+    --light: #E0F2F1;
+    --accent: #4DB6AC;
+    --background: #f8f9fa;
+    --card-bg: #ffffff;
+    --text: #333333;
+}
+
+/* 全体のデザイン */
+.main {
+    background-color: var(--background);
+    color: var(--text);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+/* サイドバーのスタイル */
+[data-testid="stSidebar"] {
+    background-color: var(--primary);
+    color: white !important;
+    padding: 1rem;
+}
+
+/* サイドバー内のテキスト */
+[data-testid="stSidebar"] .css-pkbazv {
+    color: white !important;
+}
+
+/* ヘッダーとタイトル */
+h1 {
+    color: var(--primary);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 600;
+    border-bottom: 2px solid var(--secondary);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+h2 {
+    color: var(--secondary);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 1.8rem;
+    margin-top: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+h3 {
+    color: var(--secondary);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 1.4rem;
+    margin-top: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+/* コンパクトなカードコンポーネント */
+.card {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+/* ボタンスタイル */
+.stButton > button {
+    background-color: var(--secondary);
+    color: white;
+    font-weight: 500;
+    border-radius: 6px;
+    padding: 0.5rem 1.5rem;
+    border: none;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.stButton > button:hover {
+    background-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 77, 64, 0.2);
+}
+
+/* タイムライン関連のスタイル */
+.timeline-container {
+    position: relative;
+    padding-left: 2rem;
+    margin-bottom: 1rem;
+}
+.timeline-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0.5rem;
+    height: 100%;
+    width: 2px;
+    background-color: #ddd;
+}
+.timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -2rem;
+    top: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    background-color: #00796B;
+}
+.timeline-content {
+    padding: 0.75rem;
+    border-radius: 8px;
+    background-color: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.agent-name {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+.agent-icon {
+    font-size: 1.2rem;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+.agent-summarizer {
+    border-left: 3px solid #009688;
+}
+.agent-reviewer {
+    border-left: 3px solid #673AB7;
+}
+.agent-title {
+    border-left: 3px solid #FF5722;
+}
+.progress-bar {
+    height: 6px;
+    background-color: #f0f0f0;
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+.progress-value {
+    height: 100%;
+    background-color: #00796B;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+.new-message {
+    border-left-width: 3px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+</style>
+""", unsafe_allow_html=True)
 
 from components.sidebar import render_sidebar
 from components.workflow_viz import render_workflow_visualization
