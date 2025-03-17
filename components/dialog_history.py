@@ -4,7 +4,6 @@ from typing import Dict, Any, List, Optional
 import html
 import re
 
-
 def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: bool = False, last_displayed_index: int = 0):
     """
     タイムライン形式で対話履歴を表示
@@ -65,6 +64,15 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
             margin-right: 0.5rem;
             vertical-align: middle;
         }
+        .agent-summarizer {
+            border-left: 3px solid #009688;
+        }
+        .agent-reviewer {
+            border-left: 3px solid #673AB7;
+        }
+        .agent-title {
+            border-left: 3px solid #FF5722;
+        }
         .progress-bar {
             height: 6px;
             background-color: #f0f0f0;
@@ -77,15 +85,6 @@ def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: 
             background-color: #00796B;
             border-radius: 3px;
             transition: width 0.3s ease;
-        }
-        .agent-summarizer {
-            border-left: 3px solid #009688;
-        }
-        .agent-reviewer {
-            border-left: 3px solid #673AB7;
-        }
-        .agent-title {
-            border-left: 3px solid #FF5722;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -208,6 +207,9 @@ def add_to_dialog_history(
     """
     if "dialog_history" not in state:
         state["dialog_history"] = []
+    
+    # HTMLタグを除去（特に </div> タグがテキストとして表示されるのを防ぐ）
+    content = re.sub(r'</?div[^>]*>', '', content)
     
     # 現在の日時を取得
     timestamp = datetime.now().strftime("%H:%M:%S")
