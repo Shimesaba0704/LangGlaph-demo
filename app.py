@@ -12,84 +12,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSSスタイル（元のCSS内容をそのまま利用）
-st.markdown("""
-<style>
-/* カラー変数やレイアウト設定など */
-/* （元のCSS内容をそのまま利用） */
-
-/* 進捗インジケーター関連のスタイル追加 */
-.task-progress {
-    display: flex;
-    align-items: center;
-    margin-bottom: 10px;
-    animation: fadeIn 0.5s ease-out forwards;
-}
-.task-icon {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background-color: #f0f0f0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 10px;
-    font-size: 12px;
-}
-.task-icon.active {
-    background-color: #00796B;
-    color: white;
-    animation: pulse 1.5s infinite;
-}
-.task-icon.completed {
-    background-color: #4DB6AC;
-    color: white;
-}
-.task-label {
-    flex-grow: 1;
-}
-.task-status {
-    font-size: 12px;
-    color: #888;
-}
-.task-status.active {
-    color: #00796B;
-    font-weight: bold;
-}
-@keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
-}
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-.processing-indicator {
-    display: flex;
-    align-items: center;
-    background-color: #E0F2F1;
-    padding: 10px 15px;
-    border-radius: 6px;
-    margin-bottom: 15px;
-    border-left: 4px solid #00796B;
-    animation: pulse 1.5s infinite;
-}
-.processing-icon {
-    margin-right: 10px;
-    font-size: 18px;
-    color: #00796B;
-}
-.latest-action {
-    margin-top: 10px;
-    padding: 8px 12px;
-    background-color: #FFF8E1;
-    border-left: 4px solid #FFC107;
-    border-radius: 4px;
-    font-size: 14px;
-}
-</style>
-""", unsafe_allow_html=True)
+# CSSスタイルは省略（元のコードを使用）
 
 from components.sidebar import render_sidebar
 from components.workflow_viz import render_workflow_visualization
@@ -103,27 +26,21 @@ from agents.reviewer import ReviewerAgent
 from agents.title_writer import TitleCopywriterAgent
 from utils.state import create_initial_state
 
-# 初期化: セッション状態の変数
-if 'processing' not in st.session_state:
-    st.session_state.processing = False
-if 'latest_action' not in st.session_state:
-    st.session_state.latest_action = ""
-if 'current_dialog_history' not in st.session_state:
-    st.session_state.current_dialog_history = []
-if 'final_state' not in st.session_state:
-    st.session_state.final_state = {}
-if 'error_message' not in st.session_state:
-    st.session_state.error_message = None
-if 'debug_info' not in st.session_state:
-    st.session_state.debug_info = []
+# シンプルな状態管理
+if 'step' not in st.session_state:
+    st.session_state.step = "idle"  # idle, init, summarize, review, title, done
+if 'progress' not in st.session_state:
+    st.session_state.progress = 0
+if 'state' not in st.session_state:
+    st.session_state.state = {}
+if 'dialog_history' not in st.session_state:
+    st.session_state.dialog_history = []
+if 'error' not in st.session_state:
+    st.session_state.error = None
 if 'current_node' not in st.session_state:
     st.session_state.current_node = ""
-if 'progress_percentage' not in st.session_state:
-    st.session_state.progress_percentage = 0
-if 'workflow_stage' not in st.session_state:
-    st.session_state.workflow_stage = None
-if 'workflow_state' not in st.session_state:
-    st.session_state.workflow_state = {}
+if 'current_description' not in st.session_state:
+    st.session_state.current_description = ""
 
 def get_node_description(node_name):
     """ノード名に基づいて説明テキストを取得"""
@@ -136,290 +53,287 @@ def get_node_description(node_name):
     }
     return descriptions.get(node_name, "処理中...")
 
-# 要約ノードの実行
-def execute_summarize_node():
-    st.session_state.debug_info.append("要約ノード実行開始")
-    
-    # UI更新
-    st.session_state.current_node = "summarize"
-    st.session_state.progress_percentage = 30
-    st.session_state.latest_action = get_node_description("summarize")
-    
-    # Deepseek APIで要約実行
-    client = get_client()
-    agent = SummarizerAgent(client)
-    
-    # 状態を取得
-    state = st.session_state.workflow_state
-    state["revision_count"] += 1
-    
-    # 対話履歴に追加
-    state = add_to_dialog_history(
-        state, 
-        "system", 
-        f"要約エージェントが要約を作成 (第{state['revision_count']}版)",
-        progress=10
-    )
-    
-    state = add_to_dialog_history(
-        state, 
-        "summarizer", 
-        "要約を生成しています...",
-        progress=20
-    )
-    
-    state = add_to_dialog_history(
-        state, 
-        "summarizer", 
-        "テキストを分析中...",
-        progress=30
-    )
-    
-    # 最新の状態を更新
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.rerun()
-    
-    # 要約生成
-    if state["revision_count"] == 1:
-        state = add_to_dialog_history(
-            state, 
-            "summarizer", 
-            "初回の要約を作成中...",
-            progress=40
-        )
-        st.session_state.workflow_state = state
-        st.session_state.current_dialog_history = state["dialog_history"]
-        st.rerun()
-        
-        summary = agent.call(state["input_text"])
-    else:
-        state = add_to_dialog_history(
-            state, 
-            "summarizer", 
-            "フィードバックを基に要約を改善中...",
-            progress=40
-        )
-        st.session_state.workflow_state = state
-        st.session_state.current_dialog_history = state["dialog_history"]
-        st.rerun()
-        
-        summary = agent.refine(state["input_text"], state["feedback"])
-    
-    # 状態を更新
-    state["summary"] = summary
-    
-    # 対話履歴に追加
-    state = add_to_dialog_history(
-        state, 
-        "summarizer", 
-        f"【要約 第{state['revision_count']}版】\n{summary}",
-        progress=60
-    )
-    
-    # 状態の更新
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.session_state.debug_info.append("要約ノード実行完了")
-    
-    # 次のステージを設定
-    st.session_state.workflow_stage = "review"
-    st.rerun()
-
-# レビューノードの実行
-def execute_review_node():
-    st.session_state.debug_info.append("レビューノード実行開始")
-    
-    # UI更新
-    st.session_state.current_node = "review"
-    st.session_state.progress_percentage = 65
-    st.session_state.latest_action = get_node_description("review")
-    
-    # 状態を取得
-    state = st.session_state.workflow_state
-    
-    # 対話履歴に追加
-    state = add_to_dialog_history(
-        state, 
-        "system", 
-        "批評エージェントが要約レビューを実施",
-        progress=65
-    )
-    
-    state = add_to_dialog_history(
-        state, 
-        "reviewer", 
-        "レビューを実施しています...",
-        progress=70
-    )
-    
-    # 状態の更新
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.rerun()
-    
-    # 進行中メッセージ
-    state = add_to_dialog_history(
-        state, 
-        "reviewer", 
-        "要約の品質を評価中...",
-        progress=75
-    )
-    
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.rerun()
-    
-    # Deepseek APIでレビュー実行
-    client = get_client()
-    agent = ReviewerAgent(client)
-    
-    # 最終レビューかどうか
-    is_final_review = (state["revision_count"] >= 3)
-    
-    # レビュー実行
-    feedback = agent.call(
-        current_summary=state["summary"],
-        previous_summary=state.get("previous_summary", ""),
-        previous_feedback=state.get("previous_feedback", ""),
-        is_final_review=is_final_review
-    )
-    
-    # 状態の更新
-    state["feedback"] = feedback
-    state["previous_summary"] = state["summary"]
-    state["previous_feedback"] = feedback
-    
-    # 対話履歴に追加
-    state = add_to_dialog_history(
-        state,
-        "reviewer",
-        f"【フィードバック】\n{feedback}",
-        progress=80
-    )
-    
-    # 状態の更新
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.rerun()
-    
-    # 承認判定
-    is_approved = agent.check_approval(feedback, state["revision_count"])
-    state["approved"] = is_approved
-    
-    # 判定結果をログ
-    judge_msg = "承認" if is_approved else "改訂が必要"
-    state = add_to_dialog_history(
-        state,
-        "reviewer",
-        f"【判定】{judge_msg}",
-        progress=85
-    )
-    
-    # 状態の更新
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.session_state.debug_info.append(f"レビューノード実行完了: 承認={is_approved}")
-    
-    # 次のステージを判断
-    if is_approved:
-        st.session_state.workflow_stage = "title"
-    else:
-        # 最大改訂回数を超えていたら強制的にタイトル生成へ
-        if state["revision_count"] >= 3:
-            st.session_state.workflow_stage = "title"
-        else:
-            st.session_state.workflow_stage = "summarize"
-    
-    st.rerun()
-
-# タイトルノードの実行
-def execute_title_node():
-    st.session_state.debug_info.append("タイトルノード実行開始")
-    
-    # UI更新
-    st.session_state.current_node = "title_node"
-    st.session_state.progress_percentage = 87
-    st.session_state.latest_action = get_node_description("title_node")
-    
-    # 状態を取得
-    state = st.session_state.workflow_state
-    
-    # 対話履歴に追加
-    state = add_to_dialog_history(
-        state, 
-        "system", 
-        "タイトル命名エージェントがタイトルを生成します",
-        progress=87
-    )
-    
-    state = add_to_dialog_history(
-        state, 
-        "title", 
-        "タイトルを生成しています...",
-        progress=90
-    )
-    
-    # 状態の更新
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.rerun()
-    
-    # 進捗メッセージ追加
-    state = add_to_dialog_history(
-        state, 
-        "title", 
-        "要約内容からタイトルを検討中...",
-        progress=93
-    )
-    
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.rerun()
-    
-    # Deepseek APIでタイトル生成
-    client = get_client()
-    agent = TitleCopywriterAgent(client)
-    
-    # タイトル生成
-    output = agent.call(state["input_text"], state.get("transcript", []), state["summary"])
-    
-    # 状態の更新
-    state["title"] = output.get("title", "")
-    state["final_summary"] = output.get("summary", "")
-    
-    # 対話履歴に追加
-    state = add_to_dialog_history(
-        state,
-        "title",
-        f"【生成タイトル】『{state['title']}』",
-        progress=96
-    )
-    
-    # 状態の更新
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.rerun()
-    
-    # 処理完了
-    state = add_to_dialog_history(
-        state, 
-        "system", 
-        "すべての処理が完了しました。",
-        progress=100
-    )
-    
-    # 最終状態の更新
-    st.session_state.workflow_state = state
-    st.session_state.current_dialog_history = state["dialog_history"]
-    st.session_state.final_state = state.copy()
-    st.session_state.current_node = "END"
-    st.session_state.progress_percentage = 100
-    st.session_state.debug_info.append("タイトルノード実行完了")
-    
-    # 完了フラグを設定
-    st.session_state.workflow_stage = "completed"
-    st.rerun()
+def process_step():
+    """現在のステップに基づいて処理を実行"""
+    try:
+        # 初期化ステップ
+        if st.session_state.step == "init":
+            user_input = st.session_state.input_text
+            
+            # 初期状態作成
+            state = create_initial_state(user_input)
+            state = add_to_dialog_history(
+                state,
+                "system",
+                "新しいテキストが入力されました。ワークフローを開始します。",
+                progress=5
+            )
+            
+            # 状態更新
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            st.session_state.progress = 5
+            st.session_state.current_node = ""
+            st.session_state.current_description = "ワークフローを初期化中..."
+            
+            # 次のステップへ
+            st.session_state.step = "summarize"
+            
+        # 要約ステップ
+        elif st.session_state.step == "summarize":
+            st.session_state.current_node = "summarize"
+            st.session_state.current_description = get_node_description("summarize")
+            st.session_state.progress = 30
+            
+            state = st.session_state.state
+            client = get_client()
+            agent = SummarizerAgent(client)
+            
+            # 要約作成
+            state["revision_count"] += 1
+            
+            # 対話履歴に追加
+            state = add_to_dialog_history(
+                state, 
+                "system", 
+                f"要約エージェントが要約を作成 (第{state['revision_count']}版)",
+                progress=10
+            )
+            
+            state = add_to_dialog_history(
+                state, 
+                "summarizer", 
+                "要約を生成しています...",
+                progress=20
+            )
+            
+            state = add_to_dialog_history(
+                state, 
+                "summarizer", 
+                "テキストを分析中...",
+                progress=30
+            )
+            
+            # 状態更新
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # 要約生成
+            if state["revision_count"] == 1:
+                state = add_to_dialog_history(
+                    state, 
+                    "summarizer", 
+                    "初回の要約を作成中...",
+                    progress=40
+                )
+                
+                st.session_state.progress = 40
+                st.session_state.state = state
+                st.session_state.dialog_history = state["dialog_history"]
+                
+                summary = agent.call(state["input_text"])
+            else:
+                state = add_to_dialog_history(
+                    state, 
+                    "summarizer", 
+                    "フィードバックを基に要約を改善中...",
+                    progress=40
+                )
+                
+                st.session_state.progress = 40
+                st.session_state.state = state
+                st.session_state.dialog_history = state["dialog_history"]
+                
+                summary = agent.refine(state["input_text"], state["feedback"])
+            
+            # 状態更新
+            state["summary"] = summary
+            
+            # 対話履歴に追加
+            state = add_to_dialog_history(
+                state, 
+                "summarizer", 
+                f"【要約 第{state['revision_count']}版】\n{summary}",
+                progress=60
+            )
+            
+            st.session_state.progress = 60
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # 次のステップへ
+            st.session_state.step = "review"
+            
+        # レビューステップ
+        elif st.session_state.step == "review":
+            st.session_state.current_node = "review"
+            st.session_state.current_description = get_node_description("review")
+            st.session_state.progress = 65
+            
+            state = st.session_state.state
+            client = get_client()
+            agent = ReviewerAgent(client)
+            
+            # 対話履歴に追加
+            state = add_to_dialog_history(
+                state, 
+                "system", 
+                "批評エージェントが要約レビューを実施",
+                progress=65
+            )
+            
+            state = add_to_dialog_history(
+                state, 
+                "reviewer", 
+                "レビューを実施しています...",
+                progress=70
+            )
+            
+            st.session_state.progress = 70
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # 評価中メッセージ
+            state = add_to_dialog_history(
+                state, 
+                "reviewer", 
+                "要約の品質を評価中...",
+                progress=75
+            )
+            
+            st.session_state.progress = 75
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # レビュー実行
+            is_final_review = (state["revision_count"] >= 3)
+            
+            feedback = agent.call(
+                current_summary=state["summary"],
+                previous_summary=state.get("previous_summary", ""),
+                previous_feedback=state.get("previous_feedback", ""),
+                is_final_review=is_final_review
+            )
+            
+            # 状態更新
+            state["feedback"] = feedback
+            state["previous_summary"] = state["summary"]
+            state["previous_feedback"] = feedback
+            
+            # 対話履歴に追加
+            state = add_to_dialog_history(
+                state,
+                "reviewer",
+                f"【フィードバック】\n{feedback}",
+                progress=80
+            )
+            
+            st.session_state.progress = 80
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # 承認判定
+            is_approved = agent.check_approval(feedback, state["revision_count"])
+            state["approved"] = is_approved
+            
+            # 判定結果をログ
+            judge_msg = "承認" if is_approved else "改訂が必要"
+            state = add_to_dialog_history(
+                state,
+                "reviewer",
+                f"【判定】{judge_msg}",
+                progress=85
+            )
+            
+            st.session_state.progress = 85
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # 次のステップを判断
+            if is_approved or state["revision_count"] >= 3:
+                st.session_state.step = "title"
+            else:
+                st.session_state.step = "summarize"
+            
+        # タイトル生成ステップ
+        elif st.session_state.step == "title":
+            st.session_state.current_node = "title_node"
+            st.session_state.current_description = get_node_description("title_node")
+            st.session_state.progress = 87
+            
+            state = st.session_state.state
+            client = get_client()
+            agent = TitleCopywriterAgent(client)
+            
+            # 対話履歴に追加
+            state = add_to_dialog_history(
+                state, 
+                "system", 
+                "タイトル命名エージェントがタイトルを生成します",
+                progress=87
+            )
+            
+            state = add_to_dialog_history(
+                state, 
+                "title", 
+                "タイトルを生成しています...",
+                progress=90
+            )
+            
+            st.session_state.progress = 90
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # 検討中メッセージ
+            state = add_to_dialog_history(
+                state, 
+                "title", 
+                "要約内容からタイトルを検討中...",
+                progress=93
+            )
+            
+            st.session_state.progress = 93
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # タイトル生成
+            output = agent.call(state["input_text"], state.get("transcript", []), state["summary"])
+            
+            # 状態更新
+            state["title"] = output.get("title", "")
+            state["final_summary"] = output.get("summary", "")
+            
+            # 対話履歴に追加
+            state = add_to_dialog_history(
+                state,
+                "title",
+                f"【生成タイトル】『{state['title']}』",
+                progress=96
+            )
+            
+            st.session_state.progress = 96
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # 完了メッセージ
+            state = add_to_dialog_history(
+                state, 
+                "system", 
+                "すべての処理が完了しました。",
+                progress=100
+            )
+            
+            st.session_state.progress = 100
+            st.session_state.current_node = "END"
+            st.session_state.state = state
+            st.session_state.dialog_history = state["dialog_history"]
+            
+            # 完了
+            st.session_state.step = "done"
+            
+    except Exception as e:
+        st.session_state.error = str(e)
+        st.session_state.step = "done"  # エラー時も処理を終了
 
 @auth_required
 def render_main_ui():
@@ -431,11 +345,11 @@ def render_main_ui():
     </div>
     """, unsafe_allow_html=True)
     
-    # プレースホルダーとセッション状態の初期化
+    # プレースホルダー
     if 'result_placeholder' not in st.session_state:
         st.session_state.result_placeholder = st.empty()
 
-    # メイン画面（タブなし）
+    # メイン画面
     st.markdown("""
     <div class="card">
         <p>
@@ -445,19 +359,12 @@ def render_main_ui():
     </div>
     """, unsafe_allow_html=True)
     
-    # デバッグ情報表示エリア
-    debug_expander = st.expander("デバッグ情報", expanded=False)
-    with debug_expander:
-        if st.button("デバッグ情報をクリア"):
-            st.session_state.debug_info = []
-        for info in st.session_state.debug_info:
-            st.text(info)
-    
-    # 現在のワークフローの状態を表示（状態に基づいて動的に更新される）
+    # ワークフロー可視化
+    # 現在の状態とノードを取得
     current_state = {
-        "revision_count": st.session_state.final_state.get("revision_count", 0),
-        "approved": st.session_state.final_state.get("approved", False),
-        "dialog_history": st.session_state.current_dialog_history
+        "revision_count": st.session_state.state.get("revision_count", 0),
+        "approved": st.session_state.state.get("approved", False),
+        "dialog_history": st.session_state.dialog_history
     }
     
     render_workflow_visualization(current_state, st.session_state.current_node)
@@ -490,12 +397,12 @@ def render_main_ui():
         label_visibility="collapsed"
     )
     
-    # 実行ボタン
+    # 実行ボタン（処理中は無効化）
     run_button = st.button(
         "実行", 
         key="run_button", 
         use_container_width=True,
-        disabled=st.session_state.processing
+        disabled=st.session_state.step != "idle" and st.session_state.step != "done"
     )
     
     # エージェント対話履歴セクション
@@ -510,170 +417,48 @@ def render_main_ui():
         if not user_input:
             st.error("文章が入力されていません。")
         else:
-            # 実行状態を設定
-            st.session_state.processing = True
-            st.session_state.error_message = None
-            st.session_state.debug_info = []
-            st.session_state.debug_info.append("実行ボタンがクリックされました")
+            # 実行開始
+            st.session_state.step = "init"
+            st.session_state.error = None
             
-            # 初期化
-            st.session_state.workflow_stage = "start"
-            
-            # 初期状態の作成
-            initial_state = create_initial_state(user_input)
-            initial_state = add_to_dialog_history(
-                initial_state,
-                "system",
-                "新しいテキストが入力されました。ワークフローを開始します。",
-                progress=5
-            )
-            
-            # 状態の初期化
-            st.session_state.workflow_state = initial_state
-            st.session_state.current_dialog_history = initial_state["dialog_history"]
-            st.session_state.current_node = ""
-            st.session_state.progress_percentage = 5
-            
-            # 画面を更新して初期状態を表示
+            # 画面を更新
             st.rerun()
     
-    # ワークフローステージに基づく処理
-    if st.session_state.workflow_stage == "start":
-        st.session_state.workflow_stage = "summarize"
-        st.rerun()
+    # 現在のステップに基づいて処理を実行
+    if st.session_state.step not in ["idle", "done"]:
+        process_step()  # 現在のステップを実行
+        st.rerun()  # UIを更新
     
-    elif st.session_state.workflow_stage == "summarize":
-        try:
-            execute_summarize_node()
-        except Exception as e:
-            st.session_state.error_message = f"要約生成中にエラーが発生しました: {str(e)}"
-            st.session_state.debug_info.append(f"要約エラー: {str(e)}")
-            st.session_state.workflow_stage = None
-            st.session_state.processing = False
-            st.rerun()
-    
-    elif st.session_state.workflow_stage == "review":
-        try:
-            execute_review_node()
-        except Exception as e:
-            st.session_state.error_message = f"レビュー中にエラーが発生しました: {str(e)}"
-            st.session_state.debug_info.append(f"レビューエラー: {str(e)}")
-            st.session_state.workflow_stage = None
-            st.session_state.processing = False
-            st.rerun()
-    
-    elif st.session_state.workflow_stage == "title":
-        try:
-            execute_title_node()
-        except Exception as e:
-            st.session_state.error_message = f"タイトル生成中にエラーが発生しました: {str(e)}"
-            st.session_state.debug_info.append(f"タイトル生成エラー: {str(e)}")
-            st.session_state.workflow_stage = None
-            st.session_state.processing = False
-            st.rerun()
-    
-    elif st.session_state.workflow_stage == "completed":
-        # 処理完了
-        st.session_state.processing = False
-        st.session_state.workflow_stage = None
-    
-    # 処理中の表示
+    # 処理中・完了後の表示
     with progress_status_container:
-        if st.session_state.processing:
-            # 現在のワークフロー状態
-            current_state = st.session_state.workflow_state
-            current_node = st.session_state.current_node
-            revision_count = current_state.get("revision_count", 0)
+        if st.session_state.step != "idle":
+            # プログレスバー
+            st.progress(st.session_state.progress / 100)
             
-            # 進行中プロセスの視覚的インジケーター表示
-            st.markdown(f"""
-            <div class="processing-indicator">
-                <div class="processing-icon">⚙️</div>
-                <div>
-                    <strong>処理中...</strong> ワークフローを実行しています
-                    <div class="latest-action">{st.session_state.latest_action}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # 各タスクの状態を表示
-            st.markdown("<div style='background-color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>", unsafe_allow_html=True)
-            st.markdown("#### 実行タスクの状態")
-            
-            # プログレスバーを表示
-            st.progress(st.session_state.progress_percentage / 100)
-            
-            # 各タスクのステータス判定
-            tasks = [
-                {"id": "summarize", "label": "要約生成", "icon": "📝"},
-                {"id": "review", "label": "品質レビュー", "icon": "⭐"},
-                {"id": "title_node", "label": "タイトル生成", "icon": "🏷️"},
-                {"id": "END", "label": "処理完了", "icon": "✅"}
-            ]
-            
-            for task in tasks:
-                task_id = task["id"]
-                label = task["label"]
-                icon = task["icon"]
-                
-                # タスクの状態を判定
-                status = "待機中"
-                icon_class = ""
-                status_class = ""
-                
-                if current_node == task_id:
-                    status = "実行中"
-                    icon_class = "active"
-                    status_class = "active"
-                elif task_id == "summarize" and revision_count > 0:
-                    status = f"完了 (改訂 {revision_count}回)"
-                    icon_class = "completed"
-                elif current_node == "review" and task_id == "summarize":
-                    status = "完了"
-                    icon_class = "completed"
-                elif current_node == "title_node" and (task_id == "summarize" or task_id == "review"):
-                    status = "完了"
-                    icon_class = "completed"
-                elif current_node == "END" and task_id != "END":
-                    status = "完了"
-                    icon_class = "completed"
-                
-                # タスク状態の表示
+            # 処理中表示
+            if st.session_state.step != "done":
                 st.markdown(f"""
-                <div class="task-progress">
-                    <div class="task-icon {icon_class}">{icon}</div>
-                    <div class="task-label">{label}</div>
-                    <div class="task-status {status_class}">{status}</div>
+                <div class="processing-indicator">
+                    <div class="processing-icon">⚙️</div>
+                    <div>
+                        <strong>処理中...</strong> ワークフローを実行しています
+                        <div class="latest-action">{st.session_state.current_description}</div>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
-            
-            # 現在のステップに関する追加情報
-            if current_node == "summarize":
-                step_info = "テキストを分析し、要約を生成しています..."
-            elif current_node == "review":
-                step_info = "要約の品質を評価しています..."
-            elif current_node == "title_node":
-                step_info = "要約に適切なタイトルを付けています..."
-            elif current_node == "END":
-                step_info = "すべてのタスクが完了しました！"
-            else:
-                step_info = "ワークフローを初期化しています..."
-                
-            st.markdown(f"<div style='margin-top: 10px; font-style: italic;'>{step_info}</div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
     
     # 対話履歴の表示
     with dialog_container:
-        if st.session_state.current_dialog_history:
-            display_dialog_history(st.session_state.current_dialog_history)
+        if st.session_state.dialog_history:
+            display_dialog_history(st.session_state.dialog_history)
         else:
             st.info("対話履歴はまだありません。ワークフローを実行すると、ここに対話の流れが表示されます。")
     
     # 最終結果の表示（処理完了後）
-    if not st.session_state.processing and 'result_placeholder' in st.session_state:
+    if st.session_state.step == "done" and 'result_placeholder' in st.session_state:
         with st.session_state.result_placeholder:
-            final_state = st.session_state.final_state
-            if "title" in final_state and "final_summary" in final_state:
+            state = st.session_state.state
+            if "title" in state and "final_summary" in state:
                 st.markdown(f"""
                 <div class="result-card">
                     <div style="display: flex; align-items: center; margin-bottom: 10px;">
@@ -682,22 +467,17 @@ def render_main_ui():
                                     margin-right: 10px;">✓</div>
                         <span style="color: #00796B; font-weight: bold;">処理が完了しました (100%)</span>
                     </div>
-                    <h2>{final_state['title']}</h2>
+                    <h2>{state['title']}</h2>
                     <div style="padding: 1rem; background-color: #f9f9f9; border-radius: 6px; margin-top: 1rem;">
-                        {final_state["final_summary"]}
+                        {state["final_summary"]}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-            else:
-                # 結果が得られなかった場合は表示しない
-                if final_state and any(k for k in final_state.keys() if k not in ["dialog_history", "transcript"]):
-                    st.warning("処理は完了しましたが、完全な結果が得られませんでした。")
-                    st.json({k: v for k, v in final_state.items() if k not in ["dialog_history", "transcript"]})
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    if st.session_state.error_message:
-        st.error(st.session_state.error_message)
+    if st.session_state.error:
+        st.error(f"エラーが発生しました: {st.session_state.error}")
 
 
 if __name__ == "__main__":
