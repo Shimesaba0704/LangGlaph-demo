@@ -34,6 +34,30 @@ def render_main_ui():
     # タブの作成
     tab1, tab2 = st.tabs(["ワークフロー実行", "対話ログ"])
     
+    # 対話履歴表示用のプレースホルダを準備（タブ1用）
+    if 'dialog_placeholder_tab1' not in st.session_state:
+        st.session_state.dialog_placeholder_tab1 = st.empty()
+    
+    # 対話履歴表示用のプレースホルダを準備（タブ2用）
+    if 'dialog_placeholder_tab2' not in st.session_state:
+        st.session_state.dialog_placeholder_tab2 = st.empty()
+    
+    # 結果表示用のプレースホルダを準備
+    if 'result_placeholder' not in st.session_state:
+        st.session_state.result_placeholder = st.empty()
+    
+    # セッション状態の初期化（リアルタイム表示用）
+    if 'current_dialog_history' not in st.session_state:
+        st.session_state.current_dialog_history = []
+        
+    # 最後に表示した対話履歴の長さを追跡
+    if 'last_displayed_history_length' not in st.session_state:
+        st.session_state.last_displayed_history_length = 0
+        
+    # 処理中フラグ
+    if 'processing' not in st.session_state:
+        st.session_state.processing = False
+    
     with tab1:
         st.markdown("""
         <div class="card">
@@ -91,26 +115,6 @@ def render_main_ui():
             label_visibility="collapsed"
         )
         
-        # 対話履歴表示用のプレースホルダを準備
-        if 'dialog_placeholder' not in st.session_state:
-            st.session_state.dialog_placeholder = st.empty()
-        
-        # 結果表示用のプレースホルダを準備
-        if 'result_placeholder' not in st.session_state:
-            st.session_state.result_placeholder = st.empty()
-        
-        # セッション状態の初期化（リアルタイム表示用）
-        if 'current_dialog_history' not in st.session_state:
-            st.session_state.current_dialog_history = []
-            
-        # 最後に表示した対話履歴の長さを追跡
-        if 'last_displayed_history_length' not in st.session_state:
-            st.session_state.last_displayed_history_length = 0
-            
-        # 処理中フラグ
-        if 'processing' not in st.session_state:
-            st.session_state.processing = False
-        
         # 実行ボタン
         if st.button("実行", key="run_button", use_container_width=True, disabled=st.session_state.processing):
             if not user_input:
@@ -137,10 +141,10 @@ def render_main_ui():
                     "新しいテキストが入力されました。ワークフローを開始します。"
                 )
                 
-                # 最初の対話履歴を表示
+                # 最初の対話履歴を表示（タブ1）
                 st.session_state.current_dialog_history = initial_state["dialog_history"]
                 
-                with st.session_state.dialog_placeholder.container():
+                with st.session_state.dialog_placeholder_tab1.container():
                     st.subheader("エージェント対話履歴 (リアルタイム)")
                     display_dialog_history(st.session_state.current_dialog_history)
                     st.session_state.last_displayed_history_length = len(st.session_state.current_dialog_history)
@@ -157,12 +161,22 @@ def render_main_ui():
                             current_history = node_state["dialog_history"]
                             st.session_state.current_dialog_history = current_history
                             
-                            # 進捗状況も含めて増分更新
+                            # タブ1の進捗状況を更新
                             update_dialog_display(
-                                st.session_state.dialog_placeholder,
+                                st.session_state.dialog_placeholder_tab1,
                                 current_history,
                                 st.session_state.last_displayed_history_length
                             )
+                            
+                            # タブ2の進捗状況も同時に更新
+                            with st.session_state.dialog_placeholder_tab2.container():
+                                st.subheader("最新の対話履歴")
+                                display_dialog_history(
+                                    current_history,
+                                    highlight_new=True,
+                                    last_displayed_index=st.session_state.last_displayed_history_length
+                                )
+                            
                             st.session_state.last_displayed_history_length = len(current_history)
                             
                             # ノードが完了した場合は状態を更新
@@ -209,26 +223,27 @@ def render_main_ui():
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tab2:
-        # 設定とログタブのコンテンツ
+        # 対話ログタブのコンテンツ
         st.header("エージェント対話ログ")
         
         # 情報セクション
         st.markdown("""
         <div class="card">
             <h3>LangGraphワークフロー情報</h3>
-            <p>エージェント間の対話内容が処理完了後に表示されます。</p>
+            <p>エージェント間の対話内容がリアルタイムで表示されます。</p>
         </div>
         """, unsafe_allow_html=True)
         
         # 詳細ログセクション
         with st.expander("実行履歴", expanded=True):
-            if 'current_dialog_history' in st.session_state and st.session_state.current_dialog_history:
-                # 対話履歴
-                st.subheader("最新の対話履歴")
-                display_dialog_history(st.session_state.current_dialog_history)
+            # タブ2用のプレースホルダをここに配置
+            if st.session_state.current_dialog_history:
+                with st.session_state.dialog_placeholder_tab2.container():
+                    st.subheader("最新の対話履歴")
+                    display_dialog_history(st.session_state.current_dialog_history)
             else:
                 st.info("実行履歴がありません。ワークフローを実行すると、ここに履歴が表示されます。")
-            pass
+
 
 # サイドバーとメインUIの描画
 if __name__ == "__main__":
