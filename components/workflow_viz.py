@@ -54,13 +54,10 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
                 unsafe_allow_html=True
             )
     
-    # ワークフローの説明をテキストのみで表示（見出しレベルと位置を調整）
-    st.markdown("### ワークフローの流れ")
-    
     st.markdown(
         """
         <div style="background-color:#F5F5F5; padding:15px; border-radius:5px; margin:10px 0;">
-        <strong>基本フロー:</strong><br>
+        <strong>ワークフローの説明:</strong><br>
         1. <strong>開始</strong> → <strong>要約生成</strong>：テキストの初回要約を生成<br>
         2. <strong>要約生成</strong> → <strong>レビュー</strong>：生成された要約の品質を評価<br>
         3. <strong>レビュー</strong> → <strong>タイトル生成</strong>：要約が<span style="color:#1B5E20; font-weight:bold;">承認</span>された場合<br>
