@@ -41,20 +41,12 @@ def node_summarize(state: State) -> Generator[State, None, State]:
     
     # 1回目の要約かどうかで処理を分岐
     if state["revision_count"] == 1:
-        # 実際にエージェントへ渡すプロンプトを対話履歴に記録（オプション）
-        prompt_text = agent.prompt_template.format(input_text=state["input_text"])
-        state = add_to_dialog_history(state, "summarizer", f"【送信プロンプト】\n{prompt_text}")
-        yield state  # <-- 増分更新
-        
+        # プロンプト内容をログに記録しない（修正）
+        # 実際の処理を実行
         summary = agent.call(state["input_text"])
     else:
-        prompt_text = agent.refine_prompt_template.format(
-            input_text=state["input_text"],
-            feedback=state["feedback"]
-        )
-        state = add_to_dialog_history(state, "summarizer", f"【送信プロンプト】\n{prompt_text}")
-        yield state  # <-- 増分更新
-        
+        # プロンプト内容をログに記録しない（修正）
+        # フィードバックに基づいて要約を改善
         summary = agent.refine(state["input_text"], state["feedback"])
     
     state["summary"] = summary
@@ -99,10 +91,8 @@ def node_review(state: State) -> Generator[State, None, State]:
     
     # 最終レビューかどうか
     is_final_review = (state["revision_count"] >= 3)
-    
-    # 実際に呼び出す前に、送信するプロンプトの一部をログしてもよい
-    # 今回は省略しておく
 
+    # レビュー実行
     feedback = agent.call(
         current_summary=state["summary"],
         previous_summary=state.get("previous_summary", ""),
@@ -165,6 +155,7 @@ def node_title(state: State) -> Generator[State, None, State]:
     )
     yield state  # <-- 増分更新
     
+    # タイトル生成
     output = agent.call(state["input_text"], state.get("transcript", []), state["summary"])
     state["title"] = output.get("title", "")
     state["final_summary"] = output.get("summary", "")
