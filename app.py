@@ -1,6 +1,5 @@
 import streamlit as st
 import time
-import threading
 from dotenv import load_dotenv
 from auth import auth_required
 
@@ -105,28 +104,16 @@ from utils.state import create_initial_state
 # 初期化: セッション状態の変数
 if 'processing' not in st.session_state:
     st.session_state.processing = False
-if 'reset_processing' not in st.session_state:
-    st.session_state.reset_processing = False
 if 'latest_action' not in st.session_state:
     st.session_state.latest_action = ""
-if 'need_rerun' not in st.session_state:
-    st.session_state.need_rerun = False
 if 'current_dialog_history' not in st.session_state:
     st.session_state.current_dialog_history = []
 if 'final_state' not in st.session_state:
     st.session_state.final_state = {}
 if 'error_message' not in st.session_state:
     st.session_state.error_message = None
-
-# rerunフラグが設定されていれば再実行
-if st.session_state.need_rerun:
-    st.session_state.need_rerun = False
-    st.rerun()
-
-# 明示的にprocessingをリセットするフラグ
-if st.session_state.reset_processing:
-    st.session_state.processing = False
-    st.session_state.reset_processing = False
+if 'debug_info' not in st.session_state:
+    st.session_state.debug_info = []
 
 def get_node_description(node_name):
     """ノード名に基づいて説明テキストを取得"""
@@ -162,6 +149,14 @@ def render_main_ui():
         </p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # デバッグ情報表示エリア（通常は非表示）
+    debug_expander = st.expander("デバッグ情報", expanded=False)
+    with debug_expander:
+        if st.button("デバッグ情報をクリア"):
+            st.session_state.debug_info = []
+        for info in st.session_state.debug_info:
+            st.text(info)
     
     # 初期ワークフローの表示
     initial_state = {
@@ -221,87 +216,107 @@ def render_main_ui():
         elif st.session_state.processing:
             st.warning("すでに処理中です。完了までお待ちください。")
         else:
-            st.session_state.processing = True
-            st.session_state.error_message = None
-            graph = create_workflow_graph()
-            client = get_client()
-            
-            # 対話履歴の初期化
-            st.session_state.current_dialog_history = []
-            
-            # 初期状態の作成と対話履歴への追加
-            initial_state = create_initial_state(user_input)
-            initial_state = add_to_dialog_history(
-                initial_state,
-                "system",
-                "新しいテキストが入力されました。ワークフローを開始します。",
-                progress=5  # 初期進捗状態
-            )
-            st.session_state.current_dialog_history = initial_state["dialog_history"]
-            
-            # セッション状態に最終結果用の初期状態をセット
-            st.session_state.final_state = initial_state.copy()
-            # 最新アクション状態をリセット
-            st.session_state.latest_action = "ワークフローを開始しています..."
-            
-            # ワークフロー処理をバックグラウンドスレッドで実行
-            def run_workflow():
+            try:
+                # 処理開始
+                st.session_state.processing = True
+                st.session_state.error_message = None
+                
+                # デバッグ情報をクリア
+                st.session_state.debug_info = []
+                st.session_state.debug_info.append("ワークフロー実行開始")
+                
+                # プログレスバーとステータス表示
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                status_text.info("ワークフローを初期化中...")
+                
+                # グラフの作成
+                st.session_state.debug_info.append("グラフを作成中...")
+                graph = create_workflow_graph()
+                st.session_state.debug_info.append("グラフ作成完了")
+                
+                # 対話履歴の初期化
+                st.session_state.current_dialog_history = []
+                
+                # 初期状態の作成と対話履歴への追加
+                st.session_state.debug_info.append("初期状態を作成中...")
+                initial_state = create_initial_state(user_input)
+                initial_state = add_to_dialog_history(
+                    initial_state,
+                    "system",
+                    "新しいテキストが入力されました。ワークフローを開始します。",
+                    progress=5  # 初期進捗状態
+                )
+                st.session_state.current_dialog_history = initial_state["dialog_history"]
+                
+                # セッション状態に最終結果用の初期状態をセット
+                st.session_state.final_state = initial_state.copy()
+                # 最新アクション状態をリセット
+                st.session_state.latest_action = "ワークフローを開始しています..."
+                
+                # 画面を更新
+                progress_bar.progress(10)
+                status_text.info("ワークフローを実行中...")
+                st.session_state.debug_info.append("ストリーム実行を開始...")
+                
+                # ワークフローをスレッドなしで直接実行
                 try:
-                    # グローバル変数を使わず、安全にセッション状態を更新
-                    result_states = []
-                    
-                    # ワークフローの実行
+                    # 各ステップの実行を段階的に表示
+                    progress_value = 10
                     for event_type, data in graph.stream(initial_state):
-                        if event_type == "on_chain_end":
+                        if event_type == "on_chain_start":
+                            # ノード実行開始時
+                            node_name = data.get("current_node", "")
+                            st.session_state.debug_info.append(f"ノード {node_name} の実行開始")
+                            st.session_state.latest_action = get_node_description(node_name)
+                            progress_value += 5
+                            progress_bar.progress(min(progress_value, 95))
+                            status_text.info(f"{st.session_state.latest_action}")
+                            
+                        elif event_type == "on_chain_end":
                             # ノード実行終了時
-                            current_node = data.get("current_node", "")
-                            action_desc = get_node_description(current_node)
+                            node_name = data.get("current_node", "")
+                            st.session_state.debug_info.append(f"ノード {node_name} の実行完了")
                             
-                            # スレッドセーフな方法でセッション状態を更新
-                            # これらの更新はUIに直接影響しないのでスレッド内でも安全
-                            st.session_state.latest_action = action_desc
-                            
-                            # 対話履歴も更新（deepcopyを使って安全にコピー）
+                            # 状態を更新
+                            st.session_state.final_state = data.copy()
                             if "dialog_history" in data:
                                 st.session_state.current_dialog_history = data["dialog_history"].copy()
+                                
+                            # 進捗を更新
+                            progress_value += 10
+                            progress_bar.progress(min(progress_value, 95))
+                            status_text.success(f"{get_node_description(node_name)} (完了)")
                             
-                            # 一時的な状態更新
-                            st.session_state.final_state.update(data.copy())
-                            
-                            # 結果を保存
-                            result_states.append(data.copy())
-                            
-                            # 少し待機してUI更新の時間を与える
+                            # 画面更新のための短い待機
                             time.sleep(0.5)
                     
                     # 最終結果の設定
+                    st.session_state.debug_info.append("ワークフロー処理完了")
                     final_result = graph.get_state()
-                    st.session_state.final_state.update(final_result.copy())
+                    st.session_state.final_state = final_result.copy()
                     
                     if "dialog_history" in final_result:
                         st.session_state.current_dialog_history = final_result["dialog_history"].copy()
                     
-                    st.session_state.latest_action = "処理が完了しました"
-                
-                except Exception as e:
-                    # エラー発生時の処理
-                    st.session_state.error_message = f"処理中にエラーが発生しました: {str(e)}"
-                    st.session_state.latest_action = "エラーが発生しました"
-                
-                finally:
-                    # 処理完了フラグ設定
-                    st.session_state.processing = False
-                    st.session_state.reset_processing = True
+                    progress_bar.progress(100)
+                    status_text.success("処理が完了しました!")
                     
-                    # 安全な再描画のために、フラグ経由でrerunを指示
-                    st.session_state.need_rerun = True
-            
-            # デーモンスレッドとして実行（メインスレッドが終了したらバックグラウンドも終了）
-            workflow_thread = threading.Thread(target=run_workflow, daemon=True)
-            workflow_thread.start()
-            
-            # 最初のUI更新を即座に行う
-            st.rerun()
+                except Exception as e:
+                    st.session_state.debug_info.append(f"ワークフロー実行エラー: {str(e)}")
+                    progress_bar.progress(100)
+                    status_text.error(f"エラーが発生しました: {str(e)}")
+                    st.session_state.error_message = f"ワークフロー実行中にエラーが発生しました: {str(e)}"
+                
+                # 処理完了
+                st.session_state.processing = False
+                st.rerun()
+                
+            except Exception as e:
+                st.session_state.processing = False
+                st.session_state.debug_info.append(f"全体処理エラー: {str(e)}")
+                st.session_state.error_message = f"処理中にエラーが発生しました: {str(e)}"
+                st.error(st.session_state.error_message)
     
     # 処理中の表示
     with progress_status_container:
