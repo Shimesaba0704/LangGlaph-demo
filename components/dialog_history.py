@@ -1,262 +1,238 @@
 import streamlit as st
-from dotenv import load_dotenv
-from auth import auth_required
-import time
-
-load_dotenv()
-
-from utils.theme import setup_langgraph_theme
-setup_langgraph_theme()
-
-from components.sidebar import render_sidebar
-from components.workflow_viz import render_workflow_visualization
-from components.dialog_history import display_dialog_history, add_to_dialog_history, update_dialog_display
-
-from utils.api_client import initialize_client, get_client
-initialize_client()
-
-from graph.workflow import create_workflow_graph
-
-from utils.state import create_initial_state
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+import html
 
 
-@auth_required
-def render_main_ui():
-    """メインUI - タブ式インターフェース"""
-    st.markdown("""
-    <div style="margin: 20px 0 30px 0; padding: 20px 0 15px 0; border-bottom: 2px solid #00796B;">
-        <img src="https://langchain-ai.github.io/langgraph/static/wordmark_dark.svg" 
-             alt="LangGraph" 
-             style="width: 300px; display: block; max-width: 100%;">
-    </div>
-    """, unsafe_allow_html=True)
+def display_dialog_history(dialog_history: List[Dict[str, Any]], highlight_new: bool = False, last_displayed_index: int = 0):
+    """
+    タイムライン形式で対話履歴を表示
     
-    # タブの作成
-    tab1, tab2 = st.tabs(["ワークフロー実行", "対話ログ"])
+    Args:
+        dialog_history: 対話履歴リスト
+        highlight_new: 新しいメッセージをハイライトするかどうか
+        last_displayed_index: 最後に表示したインデックス（新しいメッセージのハイライト用）
+    """
+    if not dialog_history:
+        st.info("対話履歴はまだありません。ワークフローを実行すると、ここに対話の流れが表示されます。")
+        return
     
-    # 対話履歴表示用のプレースホルダを準備（タブ1用）
-    if 'dialog_placeholder_tab1' not in st.session_state:
-        st.session_state.dialog_placeholder_tab1 = st.empty()
-    
-    # 対話履歴表示用のプレースホルダを準備（タブ2用）
-    if 'dialog_placeholder_tab2' not in st.session_state:
-        st.session_state.dialog_placeholder_tab2 = st.empty()
-    
-    # 結果表示用のプレースホルダを準備
-    if 'result_placeholder' not in st.session_state:
-        st.session_state.result_placeholder = st.empty()
-    
-    # セッション状態の初期化（リアルタイム表示用）
-    if 'current_dialog_history' not in st.session_state:
-        st.session_state.current_dialog_history = []
-        
-    # 最後に表示した対話履歴の長さを追跡
-    if 'last_displayed_history_length' not in st.session_state:
-        st.session_state.last_displayed_history_length = 0
-        
-    # 処理中フラグ
-    if 'processing' not in st.session_state:
-        st.session_state.processing = False
-    
-    with tab1:
+    # タイムラインスタイルの定義（一度だけ）
+    if "timeline_style_added" not in st.session_state:
         st.markdown("""
-        <div class="card">
-            <p>
-                テキスト要約を行う3つのエージェント（要約者、批評家、タイトル作成者）が協力して作業します。
-                入力したテキストを要約し、批評・改善を経て、最終的に適切なタイトルがつけられます。
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # 初期ワークフローの表示
-        initial_state = {
-            "revision_count": 0,
-            "approved": False,
-            "dialog_history": []
+        <style>
+        .timeline-container {
+            position: relative;
+            padding-left: 2rem;
+            margin-bottom: 1rem;
         }
-        
-        # ワークフロー図の可視化
-        render_workflow_visualization(initial_state)
-        
-        # 入力エリア
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        
-        # 入力テキストの例
-        example_texts = [
-            "例文を選択してください...",
-            "人工知能（AI）は、機械学習、深層学習、自然言語処理などの技術を通じて、人間のような知能を模倣するコンピュータシステムです。近年のAI技術の急速な進歩により、自動運転車、医療診断、翻訳サービスなど、様々な分野で革新的なアプリケーションが開発されています。AIの発展は私たちの生活や仕事のあり方を大きく変えつつありますが、同時にプライバシーや雇用への影響など、社会的・倫理的な課題も提起しています。",
-            "宇宙探査は人類の好奇心と技術の集大成です。太陽系の惑星や衛星への無人探査機の送付から、国際宇宙ステーションでの有人ミッション、さらには将来の火星有人探査計画まで、私たちは宇宙への理解を深め続けています。これらのミッションから得られる科学的データは、地球外生命の可能性の探索や、宇宙の起源についての理解を深めるのに役立っています。宇宙探査は技術革新を促進し、地球上の課題解決にも応用される新技術の開発につながっています。"
-        ]
-        
-        # サンプルテキスト選択ドロップダウン
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.subheader("テキスト入力")
-        
-        with col2:
-            selected_example = st.selectbox(
-                "サンプルを選択", 
-                example_texts,
-                key="example_selector",
-                label_visibility="collapsed"
-            )
-        
-        # 選択されたサンプルテキストまたは空の入力欄を表示
-        if selected_example != example_texts[0]:
-            default_text = selected_example
-        else:
-            default_text = ""
-        
-        user_input = st.text_area(
-            "要約したい文章を入力してください", 
-            value=default_text,
-            height=150, 
-            key="input_text",
-            label_visibility="collapsed"
-        )
-        
-        # 対話ログの表示エリア
-        st.subheader("エージェント対話履歴 (リアルタイム)")
-        log_container_tab1 = st.container(height=400)
-        st.session_state.dialog_placeholder_tab1 = log_container_tab1
-        
-        # 実行ボタン
-        if st.button("実行", key="run_button", use_container_width=True, disabled=st.session_state.processing):
-            if not user_input:
-                st.error("文章が入力されていません。")
-            else:
-                # 処理中フラグをセット
-                st.session_state.processing = True
-                
-                # グラフを取得
-                graph = create_workflow_graph()
-                client = get_client()
-                
-                # 実行前に対話履歴をクリア
-                st.session_state.current_dialog_history = []
-                st.session_state.last_displayed_history_length = 0
-                
-                # 初期状態の作成
-                initial_state = create_initial_state(user_input)
-                
-                # 対話履歴に追加 - 入力テキスト
-                initial_state = add_to_dialog_history(
-                    initial_state,
-                    "system",
-                    "新しいテキストが入力されました。ワークフローを開始します。"
-                )
-                
-                # 最初の対話履歴を表示
-                st.session_state.current_dialog_history = initial_state["dialog_history"]
-                
-                # タブ1のコンテナに対話履歴を表示
-                with log_container_tab1:
-                    display_dialog_history(st.session_state.current_dialog_history)
-                    st.session_state.last_displayed_history_length = len(st.session_state.current_dialog_history)
-                
-                # タブ2のコンテナにも同じ対話履歴を表示（増分更新のため）
-                with st.session_state.dialog_placeholder_tab2:
-                    display_dialog_history(st.session_state.current_dialog_history)
-                
-                # 最終状態を追跡する変数
-                final_state = initial_state.copy()
-                
-                # イベントハンドラ設定 (増分更新)
-                def update_ui(event_type, data):
-                    # on_node_yieldとon_node_endを拾って増分更新
-                    if (event_type == "on_node_yield" or event_type == "on_node_end") and "state" in data:
-                        node_state = data["state"]
-                        if "dialog_history" in node_state:
-                            current_history = node_state["dialog_history"]
-                            st.session_state.current_dialog_history = current_history
-                            
-                            # タブ1の進捗状況を更新
-                            with log_container_tab1:
-                                display_dialog_history(
-                                    current_history,
-                                    highlight_new=True,
-                                    last_displayed_index=st.session_state.last_displayed_history_length
-                                )
-                            
-                            # タブ2の進捗状況も同時に更新
-                            with st.session_state.dialog_placeholder_tab2:
-                                display_dialog_history(
-                                    current_history,
-                                    highlight_new=True,
-                                    last_displayed_index=st.session_state.last_displayed_history_length
-                                )
-                            
-                            st.session_state.last_displayed_history_length = len(current_history)
-                            
-                            # ノードが完了した場合は状態を更新
-                            if event_type == "on_node_end":
-                                final_state.update(node_state)
-                                
-                                # 少し待機して進捗の視覚的効果を確認できるようにする
-                                time.sleep(0.3)
-                
-                config = {
-                    "configurable": {"thread_id": "1"},
-                    "events_handlers": [update_ui]
-                }
-
-                with st.spinner(f"テキスト処理中..."):
-                    try:
-                        # グラフ実行
-                        result = graph.invoke(initial_state, config)
-                        final_state.update(result)
-                    except Exception as e:
-                        st.error(f"処理中にエラーが発生しました: {str(e)}")
-                        st.exception(e)
-                    finally:
-                        # 処理完了後、フラグをリセット
-                        st.session_state.processing = False
-                
-                st.success("処理完了！")
-                
-                # 最終結果の表示
-                result_container = st.container()
-                with result_container:
-                    if "title" in final_state and "final_summary" in final_state:
-                        st.markdown(f"""
-                        <div class="result-card">
-                            <h2>{final_state['title']}</h2>
-                            <div style="padding: 1rem; background-color: #f9f9f9; border-radius: 6px; margin-top: 1rem;">
-                                {final_state["final_summary"]}
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.warning("処理は完了しましたが、完全な結果が得られませんでした。")
-                        st.json({k: v for k, v in final_state.items() if k not in ["dialog_history", "transcript"]})
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab2:
-        # 対話ログタブのコンテンツ
-        st.header("エージェント対話ログ")
-        
-        # 情報セクション
-        st.markdown("""
-        <div class="card">
-            <h3>LangGraphワークフロー情報</h3>
-            <p>エージェント間の対話内容がリアルタイムで表示されます。</p>
-        </div>
+        .timeline-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0.5rem;
+            height: 100%;
+            width: 2px;
+            background-color: #ddd;
+        }
+        .timeline-item {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -2rem;
+            top: 0.25rem;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            background-color: #00796B;
+        }
+        .timeline-content {
+            padding: 0.75rem;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .agent-name {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .agent-icon {
+            font-size: 1.2rem;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+        .progress-bar {
+            height: 6px;
+            background-color: #f0f0f0;
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .progress-value {
+            height: 100%;
+            background-color: #00796B;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        .agent-summarizer {
+            border-left: 3px solid #009688;
+        }
+        .agent-reviewer {
+            border-left: 3px solid #673AB7;
+        }
+        .agent-title {
+            border-left: 3px solid #FF5722;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        .new-message {
+            border-left-width: 3px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        </style>
         """, unsafe_allow_html=True)
+        st.session_state.timeline_style_added = True
+    
+    # 各メッセージを個別に表示
+    for i, dialog in enumerate(dialog_history):
+        agent_type = dialog.get("agent_type", "unknown")
+        content = dialog.get("content", "")
+        timestamp = dialog.get("timestamp", "")
         
-        # 詳細ログセクション
-        with st.expander("実行履歴", expanded=True):
-            log_container_tab2 = st.container(height=500)
-            st.session_state.dialog_placeholder_tab2 = log_container_tab2
-            
-            with log_container_tab2:
-                if st.session_state.current_dialog_history:
-                    display_dialog_history(st.session_state.current_dialog_history)
-                else:
-                    st.info("実行履歴がありません。ワークフローを実行すると、ここに履歴が表示されます。")
+        # HTMLタグをエスケープ処理
+        content = html.escape(content)
+        
+        # 新しいメッセージ用のクラス
+        is_new = highlight_new and i >= last_displayed_index
+        new_class = "new-message" if is_new else ""
+        
+        # エージェントタイプに基づくスタイル設定
+        if agent_type == "summarizer":
+            icon = "📝"
+            agent_class = "agent-summarizer"
+            agent_name = "要約者"
+        elif agent_type == "reviewer":
+            icon = "⭐"
+            agent_class = "agent-reviewer"
+            agent_name = "批評家"
+        elif agent_type == "title":
+            icon = "🏷️"
+            agent_class = "agent-title"
+            agent_name = "タイトル作成者"
+        elif agent_type == "system":
+            icon = "🔄"
+            agent_class = ""
+            agent_name = "システム"
+        else:
+            icon = "💬"
+            agent_class = ""
+            agent_name = "不明なエージェント"
+        
+        # 進捗情報があれば表示
+        progress_html = ""
+        if "progress" in dialog and dialog["progress"]:
+            progress = dialog["progress"]
+            progress_html = f'<div class="progress-bar"><div class="progress-value" style="width: {progress}%"></div></div>'
+        
+        # 新しいメッセージにはアニメーションエフェクトを追加
+        animation_class = "fade-in" if is_new else ""
+        
+        # 改行をHTML改行タグに変換
+        content = content.replace('\n', '<br>')
+        
+        # メッセージを個別に表示（HTML タグの入れ子を避ける）
+        st.markdown(
+            f"""
+            <div class="timeline-container">
+                <div class="timeline-item {animation_class}">
+                    <div class="timeline-content {agent_class} {new_class}">
+                        <div class="agent-name">
+                            <span class="agent-icon">{icon}</span> {agent_name}
+                            <span style="float: right; font-size: 0.8rem; color: #888;">{timestamp}</span>
+                        </div>
+                        <div>{content}</div>
+                        {progress_html}
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 
-# サイドバーとメインUIの描画
-if __name__ == "__main__":
-    render_sidebar()
-    render_main_ui()
+def update_dialog_display(placeholder, dialog_history: List[Dict[str, Any]], last_displayed_index: int = 0):
+    """
+    増分更新で対話履歴を表示
+    
+    Args:
+        placeholder: Streamlitのプレースホルダまたはコンテナ
+        dialog_history: 対話履歴の全リスト
+        last_displayed_index: 最後に表示されたインデックス
+    """
+    # プレースホルダまたはコンテナを使って表示を更新
+    with placeholder:
+        # 新しいメッセージをハイライト表示
+        display_dialog_history(
+            dialog_history, 
+            highlight_new=True, 
+            last_displayed_index=last_displayed_index
+        )
+
+
+def add_to_dialog_history(
+    state: Dict[str, Any], 
+    agent_type: str, 
+    content: str, 
+    progress: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    対話履歴に新しいエントリを追加
+    
+    Args:
+        state: 現在の状態
+        agent_type: エージェントタイプ
+        content: メッセージ内容
+        progress: 進捗率（0-100）
+    """
+    if "dialog_history" not in state:
+        state["dialog_history"] = []
+    
+    # 現在の日時を取得
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    
+    # 対話履歴に追加
+    state["dialog_history"].append({
+        "agent_type": agent_type,
+        "content": content,
+        "timestamp": timestamp,
+        "progress": progress
+    })
+    
+    return state
+
+
+def update_progress(
+    state: Dict[str, Any], 
+    index: int, 
+    progress: int
+) -> Dict[str, Any]:
+    """
+    特定のメッセージの進捗を更新
+    
+    Args:
+        state: 現在の状態
+        index: 更新するメッセージのインデックス
+        progress: 新しい進捗率（0-100）
+    """
+    if "dialog_history" in state and 0 <= index < len(state["dialog_history"]):
+        state["dialog_history"][index]["progress"] = progress
+    
+    return state
