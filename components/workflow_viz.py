@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 
 def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[str] = None):
     """
-    Streamlitネイティブコンポーネントのみを使用したワークフロー可視化
+    テキスト主体のシンプルなワークフロー可視化
     
     Args:
         state: 現在の状態
@@ -16,11 +16,7 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
     node_order = ["start", "summarize", "review", "title_node", "END"]
     current_index = node_order.index(active_node) if active_node in node_order else 0
     
-    # メインワークフローステップ
-    st.write("### ワークフロー進行状況")
-    cols = st.columns(5)
-    
-    # ノードの状態とラベルを定義
+    # ステップの定義
     nodes = [
         {"id": "start", "emoji": "🚀", "label": "開始"},
         {"id": "summarize", "emoji": "📝", "label": "要約生成"},
@@ -28,6 +24,10 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
         {"id": "title_node", "emoji": "🏷️", "label": "タイトル生成"},
         {"id": "END", "emoji": "✅", "label": "完了"}
     ]
+    
+    # メインワークフローステップの表示
+    st.write("### ワークフロー進行状況")
+    cols = st.columns(5)
     
     # 各ノードを表示
     for i, node in enumerate(nodes):
@@ -54,61 +54,41 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
                 unsafe_allow_html=True
             )
     
-    # 条件分岐の説明（シンプルなテキストとアイコン）
-    st.write("### 分岐条件")
-    col1, col2 = st.columns(2)
+    # ワークフローの説明をテキストのみで表示
+    st.write("### ワークフローの流れ")
     
-    with col1:
-        # 承認分岐
-        approval_active = active_node in ["title_node", "END"]
-        approval_color = "#1B5E20" if approval_active else "#CCCCCC"
-        st.markdown(
-            f"""
-            <div style="text-align:center; padding:10px;">
-                <span style="color:{approval_color}; font-size:20px;">⬆️</span><br>
-                <span style="background-color:#E8F5E9; color:#1B5E20; padding:3px 8px; 
-                border-radius:10px; font-size:0.9em; border:1px solid #1B5E20;">
-                承認時の流れ
-                </span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    
-    with col2:
-        # 改訂分岐
-        revision_active = active_node == "summarize" and state.get("revision_count", 0) > 1
-        revision_color = "#F57F17" if revision_active else "#CCCCCC"
-        st.markdown(
-            f"""
-            <div style="text-align:center; padding:10px;">
-                <span style="color:{revision_color}; font-size:20px;">↩️</span><br>
-                <span style="background-color:#FFF8E1; color:#F57F17; padding:3px 8px; 
-                border-radius:10px; font-size:0.9em; border:1px solid #F57F17;">
-                改訂要求時の流れ
-                </span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    
-    # フロー図の説明
     st.markdown(
         """
-        <div style="background-color:#F5F5F5; padding:10px; border-radius:5px; margin-top:10px;">
-        <strong>ワークフローの流れ:</strong><br>
-        1. 開始 → 要約生成：テキストの初回要約を生成<br>
-        2. 要約生成 → レビュー：生成された要約の品質を評価<br>
-        3. レビュー → タイトル生成：要約が承認された場合<br>
-        4. レビュー → 要約生成：改訂が必要な場合<br>
-        5. タイトル生成 → 完了：最終結果の生成
+        <div style="background-color:#F5F5F5; padding:15px; border-radius:5px; margin:10px 0;">
+        <strong>基本フロー:</strong><br>
+        1. <strong>開始</strong> → <strong>要約生成</strong>：テキストの初回要約を生成<br>
+        2. <strong>要約生成</strong> → <strong>レビュー</strong>：生成された要約の品質を評価<br>
+        3. <strong>レビュー</strong> → <strong>タイトル生成</strong>：要約が<span style="color:#1B5E20; font-weight:bold;">承認</span>された場合<br>
+        4. <strong>レビュー</strong> → <strong>要約生成</strong>：<span style="color:#F57F17; font-weight:bold;">改訂が必要</span>な場合（フィードバックをもとに再度要約）<br>
+        5. <strong>タイトル生成</strong> → <strong>完了</strong>：最終結果の生成
         </div>
         """,
         unsafe_allow_html=True
     )
     
-    # ステータス表示
+    # 現在の状況を表示
     st.write("### 現在の状態")
+    
+    current_status = ""
+    if active_node == "start":
+        current_status = "ワークフローを開始します"
+    elif active_node == "summarize":
+        if state.get("revision_count", 0) <= 1:
+            current_status = "最初の要約を生成しています"
+        else:
+            current_status = "レビューに基づいて要約を改訂しています"
+    elif active_node == "review":
+        current_status = "生成された要約をレビューしています"
+    elif active_node == "title_node":
+        current_status = "承認された要約にタイトルを付けています"
+    elif active_node == "END":
+        current_status = "処理が完了しました"
+    
     status_col1, status_col2 = st.columns(2)
     
     with status_col1:
@@ -118,9 +98,20 @@ def render_workflow_visualization(state: Dict[str, Any], current_node: Optional[
             st.success("✅ 要約承認済み")
         else:
             st.warning("⏳ 要約未承認")
+        
+        # 現在の状況
+        st.info(f"💬 {current_status}")
     
     with status_col2:
         # 要約実行回数
         revision_count = state.get("revision_count", 0)
         max_revisions = 3
-        st.info(f"🔄 要約実行回数: {revision_count}/{max_revisions}")
+        
+        # プログレスバーでの視覚化
+        progress_percentage = min(revision_count / max_revisions, 1.0)
+        st.write(f"🔄 要約実行回数: {revision_count}/{max_revisions}")
+        st.progress(progress_percentage)
+        
+        # 最大回数に達したかどうか
+        if revision_count >= max_revisions:
+            st.warning("⚠️ 最大改訂回数に達しました。自動的に承認されます。")
